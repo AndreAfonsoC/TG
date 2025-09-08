@@ -65,8 +65,9 @@ class CombustionChamber:
         Calcula a razão combustível ar (m_dot fuel / m_dot air) na câmara de combustão
         """
         temp_ratio = self.t0_out / self.t0_in
-        term = self.chi * self.hydrogen_pci + (1 - self.chi) * self.kerosene_pci
+        term = self.eta * (self.chi * self.hydrogen_pci + (1 - self.chi) * self.kerosene_pci)
         cp_t03 = self.cp * self.t0_in
 
         return (temp_ratio - 1) / (term / cp_t03 - temp_ratio)
 
+    # Todo: criar uma função para vermos o quanto de energia vem de cada combustível
