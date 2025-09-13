@@ -71,7 +71,7 @@ class Turbine:
 
         return p0_out
 
-class PowerTurbine():
+class PowerTurbine:
     def __init__(
             self,
             t0_in: float,
