@@ -113,9 +113,9 @@ class PowerTurbine:
         """
         Calcula a temperatura total isentrópica na saída da turbina (t0_out_isentropic).
         """
-        base = self.t0_in * (1 / self.pr_tl)
+        base = (1 / self.pr_tl)
         exponent = (self.gamma_tl - 1) / self.gamma_tl
-        return base ** exponent
+        return self.t0_in * base ** exponent
 
     def get_isentropic_work(self) -> float:
         """

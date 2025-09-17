@@ -34,10 +34,10 @@ def model_corrections(is_turbofan=True):
     else:
         # Correções específicas para turboprop
         models['N1_from_N2'] = 1.0
-        models['eta_PT_from_N2'] = np.poly1d([
+        models['eta_turbina_livre_from_N2'] = np.poly1d([
             1.9062e1, -5.2456e1, 4.7887e1, -1.3489e1
         ])
-        models['R_Exp_from_N2'] = np.poly1d([
+        models['pr_tl_from_N2'] = np.poly1d([
             -1.8063e1, 4.2469e1, -3.1480e1, 8.0681
         ])
         return models
