@@ -403,8 +403,8 @@ class Turbofan:
 
         print("\n[ Performance Geral ]")
         print(f"{'Razão Combustível/Ar (f)':<32}: {self.fuel_to_air_ratio:.5f}")
-        print(f"{'Empuxo Específico':<32}: {self.get_specific_thrust():.3f} kN/(kg/s)")
-        print(f"{'Consumo Específico (TSFC)':<32}: {1000 * self.get_tsfc():.5f} kg/(s*kN)")
+        print(f"{'Empuxo Específico':<32}: {self.get_specific_thrust():.5f} kN.s/kg")
+        print(f"{'Consumo Específico (TSFC)':<32}: {self.get_tsfc():.5f} kg/(kN.s)")
 
         if self.air_flow is not None:
             print(f"{'Empuxo Total':<32}: {self.get_thrust():.3f} kN")
@@ -568,24 +568,43 @@ class Turbofan:
 
 
 if __name__ == "__main__":
-    config_ex23 = {
-        "mach": 0.0,
-        "t_a": 290.0,
-        "p_a": 101.63,
+    config_ex73 = {
+        "mach": 0.45,
+        "altitude": 7000 * 0.3048,
+        "t_a": 246.55,
+        "p_a": 41.0,
 
-        "bpr": 4.749,
-        "prf": 1.69,
-        "prc": 17.2,
+        # Eficiências e Gammas
+        "eta_inlet": 0.97,
+        "gamma_inlet": 1.4,
+        "eta_fan": 0.9,
+        "gamma_fan": 1.4,
+        "eta_compressor": 0.75,
+        "gamma_compressor": 1.37,
+        "eta_camara": 0.9995,
+        "gamma_camara": 1.35,
+        "eta_turbina_compressor": 0.9,
+        "gamma_turbina_compressor": 1.33,
+        "eta_turbina_fan": 0.9,
+        "gamma_turbina_fan": 1.33,
+        "eta_bocal_quente": 0.98,
+        "gamma_bocal_quente": 1.36,
+        "eta_bocal_fan": 0.98,
+        "gamma_bocal_fan": 1.4,
+
+        # Dados operacionais
+        "bpr": 4.2,
+        "prf": 1.5,
+        "prc": 8.33,
         "hydrogen_fraction": 0.0,
-        "pressure_loss_factor": 0.95,
+        "pressure_loss_factor": 1.0,
         "kerosene_PCI": 45e3,  # kJ/kg
         "hydrogen_PCI": 120e3,  # kJ/kg
         "mean_R_air": 288.3,  # (m^2 / (s^2*K))
         "Cp": 1.11,  # (kJ / (kg*K))
         "T04": 1550,  # (K)
     }
-
-    turbofan = Turbofan(config_ex23)
-    turbofan.set_sea_level_air_flow(756)
+    turbofan = Turbofan(config_ex73)
+    turbofan.set_sea_level_air_flow(88.42)
     turbofan.save_design_point()
-    turbofan.update_from_N2(N2=1.0)
+    turbofan.update_from_N2(0.85)

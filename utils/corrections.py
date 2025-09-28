@@ -5,7 +5,7 @@ def model_corrections(is_turbofan=True):
 
     # Correções de rotação e bypass
     models['N1_from_N2'] = np.poly1d([1.41661, -4.0478e-1])  # N1/N1_design = f(N2/N2_design)
-    models['B_from_N1'] = np.poly1d([-8.3241e-1, 0.38824, 1.4263])  # BPR/BPR_design = f(N1/N1_design)
+    models['B_from_N1'] = np.poly1d([-8.3241e-1, 3.8824e-1, 1.4263])  # BPR/BPR_design = f(N1/N1_design)
 
     # Coeficientes para Prf
     models['A_from_B'] = np.poly1d([-0.00179, 0.00687, 0.5])  # A = f(B/B_design)
@@ -33,7 +33,7 @@ def model_corrections(is_turbofan=True):
         return models
     else:
         # Correções específicas para turboprop
-        models['N1_from_N2'] = 1.0
+        models['N1_from_N2'] = np.poly1d([0.0, 1.0])
         models['eta_turbina_livre_from_N2'] = np.poly1d([
             1.9062e1, -5.2456e1, 4.7887e1, -1.3489e1
         ])
