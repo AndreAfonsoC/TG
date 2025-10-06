@@ -39,7 +39,7 @@ class Turboprop:
         "prc": 15.77,
         "pr_tl": 2.87,
         "hydrogen_fraction": 0.0,
-        "pressure_loss_factor": 1.0,
+        "pressure_loss": 0.0,
         "kerosene_PCI": 45e3,  # kJ/kg
         "hydrogen_PCI": 120e3,  # kJ/kg
         "mean_R_air": 288.3,  # (m^2 / (s^2*K))
@@ -54,7 +54,7 @@ class Turboprop:
         "ref_pot_th": 2456.49,  # kW -> se não fornecido, pode ser considerado como 0.8 * Pot_th (termodinâmica)
     }
 
-    def __init__(self, config_dict):
+    def __init__(self, config_dict: dict):
         """
         Inicializa o motor turboprop com base em um dicionário de configuração.
 
@@ -62,50 +62,50 @@ class Turboprop:
         dicionário fornecido.
         """
         # Cria a configuração final mesclando os padrões com os fornecidos
-        final_config = self.DEFAULT_CONFIG_DICT.copy()
-        final_config.update(config_dict)
+        self.final_config = self.DEFAULT_CONFIG_DICT.copy()
+        self.final_config.update(config_dict)
 
         # --- Dados do ambiente ---
-        self.mach = final_config["mach"]
-        self.altitude = final_config["altitude"]
+        self.mach = self.final_config["mach"]
+        self.altitude = self.final_config["altitude"]
         t_a_altitude, p_a_altitude, _, _ = atmosphere(self.altitude * ft2m)
-        self.t_a = final_config.get("t_a", t_a_altitude) or t_a_altitude
-        self.p_a = final_config.get("p_a", p_a_altitude / 1000) or p_a_altitude / 1000  # Divide por 1000 para passar para kPa
+        self.t_a = self.final_config.get("t_a", t_a_altitude) or t_a_altitude
+        self.p_a = self.final_config.get("p_a", p_a_altitude / 1000) or p_a_altitude / 1000  # Divide por 1000 para passar para Pa
 
         # --- Eficiências e Gammas ---
-        self.eta_inlet = final_config["eta_inlet"]
-        self.gamma_inlet = final_config["gamma_inlet"]
-        self.eta_compressor = final_config["eta_compressor"]
-        self.gamma_compressor = final_config["gamma_compressor"]
-        self.eta_camara = final_config["eta_camara"]
-        self.gamma_camara = final_config["gamma_camara"]
-        self.eta_turbina_compressor = final_config["eta_turbina_compressor"]
-        self.gamma_turbina_compressor = final_config["gamma_turbina_compressor"]
-        self.eta_turbina_livre = final_config["eta_turbina_livre"]
-        self.gamma_turbina_livre = final_config["gamma_turbina_livre"]
-        self.eta_bocal_quente = final_config["eta_bocal_quente"]
-        self.gamma_bocal_quente = final_config["gamma_bocal_quente"]
+        self.eta_inlet = self.final_config["eta_inlet"]
+        self.gamma_inlet = self.final_config["gamma_inlet"]
+        self.eta_compressor = self.final_config["eta_compressor"]
+        self.gamma_compressor = self.final_config["gamma_compressor"]
+        self.eta_camara = self.final_config["eta_camara"]
+        self.gamma_camara = self.final_config["gamma_camara"]
+        self.eta_turbina_compressor = self.final_config["eta_turbina_compressor"]
+        self.gamma_turbina_compressor = self.final_config["gamma_turbina_compressor"]
+        self.eta_turbina_livre = self.final_config["eta_turbina_livre"]
+        self.gamma_turbina_livre = self.final_config["gamma_turbina_livre"]
+        self.eta_bocal_quente = self.final_config["eta_bocal_quente"]
+        self.gamma_bocal_quente = self.final_config["gamma_bocal_quente"]
 
         # --- Dados operacionais ---
         self.bpr = 0.0  # bypass ratio é zero para turboprop
-        self.prc = final_config["prc"]
-        self.pr_tl = final_config["pr_tl"]
-        self.hydrogen_fraction = final_config["hydrogen_fraction"]
-        self.pressure_loss_factor = final_config["pressure_loss_factor"]
-        self.kerosene_PCI = final_config["kerosene_PCI"]
-        self.hydrogen_PCI = final_config["hydrogen_PCI"]
-        self.mean_R_air = final_config["mean_R_air"]
-        self.Cp = final_config["Cp"]
-        self.Cp_tl = final_config["Cp_tl"]
-        self.t04 = final_config["T04"]
+        self.prc = self.final_config["prc"]
+        self.pr_tl = self.final_config["pr_tl"]
+        self.hydrogen_fraction = self.final_config["hydrogen_fraction"]
+        self.pressure_loss = self.final_config["pressure_loss"]
+        self.kerosene_PCI = self.final_config["kerosene_PCI"]
+        self.hydrogen_PCI = self.final_config["hydrogen_PCI"]
+        self.mean_R_air = self.final_config["mean_R_air"]
+        self.Cp = self.final_config["Cp"]
+        self.Cp_tl = self.final_config["Cp_tl"]
+        self.t04 = self.final_config["T04"]
         self.sea_level_air_flow = None
         self.air_flow = None
 
         # --- Dados da gearbox e hélice ---
-        self.gearbox_efficiency = final_config["gearbox_efficiency"]
-        self.propeller_efficiency = final_config["propeller_efficiency"]
-        self.max_gearbox_power = final_config["max_gearbox_power"]
-        self.ref_pot_th = final_config["ref_pot_th"]
+        self.gearbox_efficiency = self.final_config["gearbox_efficiency"]
+        self.propeller_efficiency = self.final_config["propeller_efficiency"]
+        self.max_gearbox_power = self.final_config["max_gearbox_power"]
+        self.ref_pot_th = self.final_config["ref_pot_th"]
 
         # Adiciona um atributo para armazenar os modelos de correção
         self._correction_models = {}
@@ -117,6 +117,18 @@ class Turboprop:
         Cada modelo retorna a razão entre o valor em um dado N2 e o valor no ponto de projeto.
         """
         self._correction_models = model_corrections(is_turbofan=False)
+
+    def update_final_config(self, config_dict: dict):
+        """
+        Atualiza a configuração do motor com novos valores fornecidos em um dicionário.
+        Quaisquer chaves ausentes manterão seus valores atuais.
+        """
+        self.final_config.update(config_dict)
+
+        # Reaplica os valores atualizados
+        self.__init__(self.final_config)
+        if hasattr(self, '_design_point'):
+            self.set_sea_level_air_flow(self._design_point['sea_level_air_flow'])
 
     def update_turboprop_components(self):
         # 1. Difusor
@@ -136,12 +148,14 @@ class Turboprop:
             self.Cp,
             self.t04,
             self.eta_camara,
+            self.gamma_camara,
             self.kerosene_PCI,
             self.hydrogen_PCI,
             self.hydrogen_fraction,
-            self.pressure_loss_factor,
+            self.pressure_loss,
         )
         self.p04 = self.combustion_chamber.get_total_pressure()
+        self.t04 = self.combustion_chamber.get_total_temperature_out()
         self.fuel_to_air_ratio = self.combustion_chamber.get_fuel_to_air_ratio()
 
         # 4. Turbina do compressor
@@ -174,15 +188,13 @@ class Turboprop:
         if self.air_flow is None:
             raise ValueError("Vazão de ar não definida.")
         else:
-            self.pot_th = self.power_turbine.get_power(
-                self.air_flow,
-                self.fuel_to_air_ratio,
-            )
+            self.turbine_airflow = self.power_turbine.get_total_air_flow(self.air_flow, self.fuel_to_air_ratio)
+            self.pot_th = self.power_turbine.get_power(self.air_flow, self.fuel_to_air_ratio)
 
-        self.pot_tl = min(self.max_gearbox_power, self.pot_th) if self.max_gearbox_power is not None else self.pot_th
+        self.pot_tl = self.pot_th
         self.pot_gear = self.gearbox_efficiency * self.pot_tl
 
-        # 6. Bocal dos gases quentes
+        # 6. Bocal dos gases quentesf
         self.core_nozzle = Nozzle(
             self.t06,
             self.p06,
@@ -276,7 +288,7 @@ class Turboprop:
         best_N2 = result.x
 
         # 4. Atualiza o estado final do objeto com o valor ótimo e salva.
-        self.N2 = best_N2
+        self.N2_ratio = best_N2
         self.update_from_N2(best_N2)
 
     def save_design_point(self):
@@ -292,7 +304,7 @@ class Turboprop:
             'eta_turbina_livre': self.eta_turbina_livre,
             'eta_turbina_compressor': self.eta_turbina_compressor,
             'eta_bocal_quente': self.eta_bocal_quente,
-            'air_flow': self.air_flow,
+            'sea_level_air_flow': self.sea_level_air_flow,
         }
 
     def update_from_N2(self, N2: float, N2_design: float = 1.0):
@@ -327,11 +339,8 @@ class Turboprop:
 
         # Vazão mássica (nesse caso hot_air_flow é igual a air_flow)
         hot_air_flow_ratio = models['m_dot_H_from_N2'](N2_ratio)
-        hot_air_flow = self._design_point['air_flow'] * hot_air_flow_ratio
-        self.set_air_flow(hot_air_flow)
-
-        # Atualiza os componentes do turboprop
-        self.update_turboprop_components()
+        hot_air_flow = self._design_point['sea_level_air_flow'] * hot_air_flow_ratio
+        self.set_sea_level_air_flow(hot_air_flow)
 
     # Velocidade de Voo
     def get_flight_speed(self):
@@ -419,39 +428,27 @@ class Turboprop:
         """
         Imprime as características de configuração do motor de forma organizada.
         """
-        print("--- Configuração do Motor Turboprop ---")
-        print("\n[ Condições de Voo e Ambiente ]")
-        print(f"{'Mach de voo':<32}: {self.mach:.3f}")
-        print(f"{'Altitude':<32}: {self.altitude:.3f} ft")
-        print(f"{'Temperatura Ambiente (T_a)':<32}: {self.t_a:.3f} K")
-        print(f"{'Pressão Ambiente (P_a)':<32}: {self.p_a:.3f} kPa")
+        print("\n--- Configuração do Motor Turboprop ---")
+        max_key_len = max(len(key) for key in self.final_config.keys())
 
-        print("\n[ Parâmetros Operacionais ]")
-        print(f"{'Razão de Pressão - Comp. (Prc)':<32}: {self.prc:.3f}")
-        print(f"{'Razão de Expansão - Turb. Livre (pr_tl)':<32}: {self.pr_tl:.3f}")
-        print(f"{'Temp. Entrada Turbina (T04)':<32}: {self.t04:.3f} K")
-        if self.air_flow is not None:
-            print(f"{'Vazão de Ar Total':<32}: {self.air_flow:.3f} kg/s")
-        else:
-            print(f"{'Vazão de Ar Total':<32}: Não definida")
+        # Categorias para melhor organização visual
+        categories = {
+            "Condições de Voo e Ambiente": ["mach", "altitude", "t_a", "p_a"],
+            "Eficiências": [k for k in self.final_config if k.startswith("eta_")],
+            "Gammas": [k for k in self.final_config if k.startswith("gamma_")],
+            "Dados Operacionais": ["prc", "pr_tl", "hydrogen_fraction", "pressure_loss", "kerosene_PCI", "hydrogen_PCI", "mean_R_air", "Cp", "Cp_tl", "T04"],
+            "Dados da Gearbox e Hélice": ["gearbox_efficiency", "propeller_efficiency", "max_gearbox_power", "ref_pot_th"]
+        }
 
-        print("\n[ Dados da Hélice e Gearbox ]")
-        print(f"{'Eficiência da Gearbox':<32}: {self.gearbox_efficiency:.3f}")
-        print(f"{'Eficiência da Hélice':<32}: {self.propeller_efficiency:.3f}")
-        print(f"{'Potência Máx. Gearbox (flat-rating)':<32}: {self.max_gearbox_power or 'N/A'} kW")
-        print(f"{'Potência Termo. de Referência':<32}: {self.ref_pot_th or 'N/A'} kW")
-
-        print("\n[ Propriedades dos Componentes ]")
-        header = f"{'Componente':<25} | {'Eficiência (eta)':<20} | {'Gamma':<15}"
-        print(header)
-        print("-" * len(header))
-        print(f"{'Inlet':<25} | {self.eta_inlet:<20.3f} | {self.gamma_inlet:<15.3f}")
-        print(f"{'Compressor':<25} | {self.eta_compressor:<20.3f} | {self.gamma_compressor:<15.3f}")
-        print(f"{'Câmara de Combustão':<25} | {self.eta_camara:<20.3f} | {self.gamma_camara:<15.3f}")
-        print(f"{'Turbina do Compressor':<25} | {self.eta_turbina_compressor:<20.3f} | {self.gamma_turbina_compressor:<15.3f}")
-        print(f"{'Turbina Livre (Potência)':<25} | {self.eta_turbina_livre:<20.3f} | {self.gamma_turbina_livre:<15.3f}")
-        print(f"{'Bocal Quente':<25} | {self.eta_bocal_quente:<20.3f} | {self.gamma_bocal_quente:<15.3f}")
-        print("\n" + "-" * 66)
+        for category, keys in categories.items():
+            print(f"\n[{category}]")
+            for key in keys:
+                value = self.final_config.get(key)
+                if isinstance(value, (int, float)):
+                    print(f"{key:<{max_key_len}}: {value:.3f}")
+                else:
+                    print(f"{key:<{max_key_len}}: {value}")
+        print("\n" + "-" * (max_key_len + 10))
 
     def print_outputs(self):
         """
@@ -464,7 +461,6 @@ class Turboprop:
 
         print("--- Resultados da Simulação do Motor ---")
 
-        # print(f"N2 = {round(self.N2, 2) } e N1 = {self.N1_ratio}")
         print("\n[ Estações do Motor ]")
         header = f"{'Estação':<20} | {'Temp. Total (K)':<20} | {'Pressão Total (kPa)':<20}"
         print(header)
@@ -476,73 +472,42 @@ class Turboprop:
         print(f"{'6 (Turbina Livre)':<20} | {self.t06:<20.3f} | {self.p06:<20.3f}")
 
         print("\n[ Dados da Turbina Livre ]")
-        print(f"{'Pressão total na saída da tl':<35}: {self.p06:.2f} K")
+        print(f"{'Razão de expansão na tl':<35}: {self.pr_tl:.3f}")
+        if hasattr(self, 'N2_ratio'):
+            print(f"{'N2':<35}: {self.N2_ratio:.3f}")
+        print(f"{'Pressão total na saída da tl':<35}: {self.p06:.2f} kPa")
         print(f"{'Temperatura Isentrópica Total':<35}: {self.total_iso_temperature:.2f} K")
         print(f"{'Temperatura Total':<35}: {self.t06:.2f} K")
-        print(f"{'Cp_tl':<35}: {self.Cp_tl:.2f} K")
+        print(f"{'Cp_tl':<35}: {self.Cp_tl:.2f}")
         print(f"{'Trabalho Isentrópico':<35}: {self.iso_work:.2f} kJ/kg")
         print(f"{'Trabalho Real':<35}: {self.real_work:.2f} kJ/kg")
-        print(f"{'Potência Termodinâmica':<35}: {self.pot_th:.2f} kW")
+        print(f"{'Vazão na turbina':<35}: {self.turbine_airflow:.2f} kg/s")
         print(f"{'Potência na Turbina Livre':<35}: {self.pot_tl:.2f} kW")
         print(f"{'Potência na Gearbox':<35}: {self.pot_gear:.2f} kW")
 
         print("\n[ Empuxo ]")
+        print(f"{'Empuxo específico do Bocal':<35}: {self.get_nozzle_specific_thrust():.3f} kN.s/kg")
         print(f"{'Empuxo do Bocal':<35}: {self.get_nozzle_thrust():.3f} kN")
-        print(f"{'Empuxo da Hélice':<35}: {self.get_propeler_thrust():.3f} kN")
-        print(f"{'Empuxo Total':<35}: {self.get_thrust():.3f} kN")
+        if self.u_flight > 0:
+            print(f"{'Empuxo da Hélice':<35}: {self.get_propeler_thrust():.3f} kN")
+            print(f"{'Empuxo Total':<35}: {self.get_thrust():.3f} kN")
+            print(f"{'Consumo Esp. / empuxo (TSFC)':<35}: {self.get_tsfc():.3f} kg/(s*kN)")
 
         print("\n[ Performance Geral ]")
         print(f"{'Razão Combustível/Ar (f)':<35}: {self.fuel_to_air_ratio:.5f}")
+        print(f"{'Velocidade Bocal Quente (u_core)':<32}: {self.u_core:.3f} m/s")
+        print(f"{'Velocidade de Voo (u_0)':<32}: {self.u_flight:.3f} m/s")
         print(f"{'Consumo Esp. no eixo (BSFC)':<35}: {self.get_bsfc()*10**5:.2f} kg/(s*kW) * 10^-5")
         print(f"{'Consumo Esp. Equivalente (EBSFC)':<35}: {self.get_ebsfc()*10**5:.2f} kg/(s*kW) * 10^-5")
-        print(f"{'Consumo Esp. / empuxo (TSFC)':<35}: {self.get_tsfc():.3f} kg/(s*kW)")
         print(f"{'Consumo de Combustível':<35}: {self.get_fuel_consumption():.3f} kg/s")
-
         print("\n" + "-" * 61)
 
 if __name__ == "__main__":
-    config_ex71 = {
-        "mach": 0.0,
-        "t_a": 288.15,
-        "p_a": 101.3,
+    from utils.configs import config_ex71, config_ex72
 
-        # Eficiências e Gammas
-        "eta_inlet": 0.85,
-        "gamma_inlet": 1.4,
-        "eta_compressor": 0.75,
-        "gamma_compressor": 1.37,
-        "eta_camara": 1,
-        "gamma_camara": 1.35,
-        "eta_turbina_compressor": 0.9,
-        "gamma_turbina_compressor": 1.33,
-        "eta_turbina_livre": 0.9,
-        "gamma_turbina_livre": 1.33,
-        "eta_bocal_quente": 0.98,
-        "gamma_bocal_quente": 1.36,
-        "eta_propeler": 0.85,
-
-        # Dados operacionais
-        "max_gearbox_power": 2050.0,  # kW
-        "prc": 15.77,
-        # Ajusta-se pr_tl para se atingir a potência termodinâmica informada pelo fabricante
-        "pr_tl": 2.87,
-        "hydrogen_fraction": 0.0,
-        "pressure_loss_factor": 1.0,
-        "kerosene_PCI": 45e3,  # kJ/kg
-        "hydrogen_PCI": 120e3,  # kJ/kg
-        "mean_R_air": 288.3,  # (m^2 / (s^2*K))
-        "Cp": 1.11,  # (kJ / (kg*K))
-        "Cp_tl": 1.16,  # (kJ / (kg*K))
-        "T04": 1600,  # (K)
-        "power_ratio_gear_to_tl": 0.98,
-        # Dados da gearbox e hélice
-        "gearbox_efficiency": 0.98,  # potência que chega na hélice / potência que sai da turbina
-        "propeller_efficiency": 0.85,
-        "ref_pot_th": 2700.49,  # kW -> se não fornecido, pode ser considerado como 0.8 * Pot_th (termodinâmica)
-        # "ref_pot_th": 2456.49,  # kW -> se não fornecido, pode ser considerado como 0.8 * Pot_th (termodinâmica)
-    }
     turboprop = Turboprop(config_ex71)
     turboprop.set_air_flow(8.49)
-    turboprop.save_design_point()
-    turboprop.update_from_N2(0.942)
-    turboprop.update_from_N2(0.942)
+    turboprop.calibrate_pot_th()
+    # turboprop.update_final_config(config_ex72)
+    # turboprop.update_from_N2(0.85)
+    turboprop.print_outputs()

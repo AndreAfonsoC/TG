@@ -1,3 +1,5 @@
+from typing import Literal
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -45,7 +47,7 @@ class Turbofan:
         "pr_bst": None,
         "prc": 28.6 / 1.5,
         "hydrogen_fraction": 0.0,
-        "pressure_loss_factor": 1.0,
+        "pressure_loss": 0.0,
         "kerosene_PCI": 45e3,  # kJ/kg
         "hydrogen_PCI": 120e3,  # kJ/kg
         "mean_R_air": 288.3,  # (m^2 / (s^2*K))
@@ -61,46 +63,47 @@ class Turbofan:
         dicionário fornecido.
         """
         # Cria a configuração final mesclando os padrões com os fornecidos
-        final_config = self.DEFAULT_CONFIG_DICT.copy()
-        final_config.update(config_dict)
+        self.final_config = self.DEFAULT_CONFIG_DICT.copy()
+        self.final_config.update(config_dict)
 
         # --- Dados do ambiente ---
-        self.mach = final_config["mach"]
-        self.altitude = final_config["altitude"]
+        self.mach = self.final_config["mach"]
+        self.altitude = self.final_config["altitude"]
         t_a_altitude, p_a_altitude, _, _ = atmosphere(self.altitude * ft2m)
-        self.t_a = final_config.get("t_a", t_a_altitude) or t_a_altitude
-        self.p_a = final_config.get("p_a", p_a_altitude / 1000) or p_a_altitude / 1000  # Divide por 1000 para passar para kPa
+        self.t_a = self.final_config.get("t_a", t_a_altitude) or t_a_altitude
+        self.p_a = self.final_config.get("p_a",
+                                    p_a_altitude / 1000) or p_a_altitude / 1000  # Divide por 1000 para passar para kPa
 
         # --- Eficiências e Gammas ---
-        self.eta_inlet = final_config["eta_inlet"]
-        self.gamma_inlet = final_config["gamma_inlet"]
-        self.eta_fan = final_config["eta_fan"]
-        self.gamma_fan = final_config["gamma_fan"]
-        self.eta_compressor = final_config["eta_compressor"]
-        self.gamma_compressor = final_config["gamma_compressor"]
-        self.eta_camara = final_config["eta_camara"]
-        self.gamma_camara = final_config["gamma_camara"]
-        self.eta_turbina_compressor = final_config["eta_turbina_compressor"]
-        self.gamma_turbina_compressor = final_config["gamma_turbina_compressor"]
-        self.eta_turbina_fan = final_config["eta_turbina_fan"]
-        self.gamma_turbina_fan = final_config["gamma_turbina_fan"]
-        self.eta_bocal_quente = final_config["eta_bocal_quente"]
-        self.gamma_bocal_quente = final_config["gamma_bocal_quente"]
-        self.eta_bocal_fan = final_config["eta_bocal_fan"]
-        self.gamma_bocal_fan = final_config["gamma_bocal_fan"]
+        self.eta_inlet = self.final_config["eta_inlet"]
+        self.gamma_inlet = self.final_config["gamma_inlet"]
+        self.eta_fan = self.final_config["eta_fan"]
+        self.gamma_fan = self.final_config["gamma_fan"]
+        self.eta_compressor = self.final_config["eta_compressor"]
+        self.gamma_compressor = self.final_config["gamma_compressor"]
+        self.eta_camara = self.final_config["eta_camara"]
+        self.gamma_camara = self.final_config["gamma_camara"]
+        self.eta_turbina_compressor = self.final_config["eta_turbina_compressor"]
+        self.gamma_turbina_compressor = self.final_config["gamma_turbina_compressor"]
+        self.eta_turbina_fan = self.final_config["eta_turbina_fan"]
+        self.gamma_turbina_fan = self.final_config["gamma_turbina_fan"]
+        self.eta_bocal_quente = self.final_config["eta_bocal_quente"]
+        self.gamma_bocal_quente = self.final_config["gamma_bocal_quente"]
+        self.eta_bocal_fan = self.final_config["eta_bocal_fan"]
+        self.gamma_bocal_fan = self.final_config["gamma_bocal_fan"]
 
         # --- Dados operacionais ---
-        self.bpr = final_config["bpr"]
-        self.prf = final_config["prf"]
-        self.pr_bst = final_config["pr_bst"]
-        self.prc = final_config["prc"]
-        self.hydrogen_fraction = final_config["hydrogen_fraction"]
-        self.pressure_loss_factor = final_config["pressure_loss_factor"]
-        self.kerosene_PCI = final_config["kerosene_PCI"]
-        self.hydrogen_PCI = final_config["hydrogen_PCI"]
-        self.mean_R_air = final_config["mean_R_air"]
-        self.Cp = final_config["Cp"]
-        self.t04 = final_config["T04"]
+        self.bpr = self.final_config["bpr"]
+        self.prf = self.final_config["prf"]
+        self.pr_bst = self.final_config["pr_bst"]
+        self.prc = self.final_config["prc"]
+        self.hydrogen_fraction = self.final_config["hydrogen_fraction"]
+        self.pressure_loss = self.final_config["pressure_loss"]
+        self.kerosene_PCI = self.final_config["kerosene_PCI"]
+        self.hydrogen_PCI = self.final_config["hydrogen_PCI"]
+        self.mean_R_air = self.final_config["mean_R_air"]
+        self.Cp = self.final_config["Cp"]
+        self.t04 = self.final_config["T04"]
         self.sea_level_air_flow = None
         self.air_flow = None
 
@@ -115,10 +118,23 @@ class Turbofan:
         """
         self._correction_models = model_corrections(is_turbofan=True)
 
+    def update_final_config(self, config_dict: dict):
+        """
+        Atualiza a configuração do motor com novos valores fornecidos em um dicionário.
+        Quaisquer chaves ausentes manterão seus valores atuais.
+        """
+        self.final_config.update(config_dict)
+
+        # Reaplica os valores atualizados
+        self.__init__(self.final_config)
+        if hasattr(self, '_design_point'):
+            self.set_sea_level_air_flow(self._design_point['sea_level_air_flow'])
+
     def save_design_point(self):
         """
         Salva os valores dos parâmetros no ponto de projeto após a calibração.
         """
+        print("Salvando ponto de projeto...")
         self._design_point = {
             'bpr': self.bpr,
             'prf': self.prf,
@@ -131,7 +147,7 @@ class Turbofan:
             'eta_turbina_fan': self.eta_turbina_fan,
             'eta_turbina_compressor': self.eta_turbina_compressor,
             'eta_bocal_quente': self.eta_bocal_quente,
-            'air_flow': self.air_flow,
+            'sea_level_air_flow': self.sea_level_air_flow,
         }
 
     def update_from_N2(self, N2: float, N2_design: float = 1.0):
@@ -147,6 +163,11 @@ class Turbofan:
 
         models = self._correction_models
         N2_ratio = N2 / N2_design
+
+        if N2_ratio == 1:
+            # Se estiver no ponto de projeto, não faz nada
+            return
+
         N1_ratio = models['N1_from_N2'](N2_ratio)
         self.N1_ratio = N1_ratio
         self.N2_ratio = N2_ratio
@@ -175,17 +196,65 @@ class Turbofan:
         self.eta_turbina_compressor = self._design_point['eta_turbina_compressor'] * models['eta_t_from_N2'](N2_ratio)
         self.eta_camara = self._design_point['eta_camara'] * models['eta_b_from_N2'](N2_ratio)
 
-        # Vazão mássica
+        # Vazão mássica (nesse caso hot_air_flow é igual a air_flow)
         hot_air_flow_ratio = models['m_dot_H_from_N2'](N2_ratio)
-        design_hot_air_flow = self._design_point['air_flow'] / (1 + self._design_point['bpr'])
-        hot_air_flow = design_hot_air_flow * hot_air_flow_ratio
-        air_flow = hot_air_flow * (1 + self.bpr)
-        self.set_air_flow(air_flow)
+        hot_air_flow = self._design_point['sea_level_air_flow'] * hot_air_flow_ratio
+        self.set_sea_level_air_flow(hot_air_flow)
 
-        # Atualiza os componentes do turbofan
-        self.update_turbofan_components()
+    def get_values_by_changing_param(
+            self,
+            value_name: str = "tsfc",
+            param: Literal["N1", "N2"] = "N2",
+            n2_range: np.ndarray = np.arange(0.5, 1.05, 0.1),
+    ) -> pd.DataFrame:
+        """
+        Gera um pd.DataFrame variando um parâmetro (N1 ou N2) e retornando os valores de uma variável específica.
 
-        print(f"Parâmetros atualizados para N2/N2_design = {N2_ratio:.4f}")
+        Args:
+            param (str): Parâmetro a ser variado ("N1" ou "N2").
+            value_name (str): Nome da variável cujo valor será retornado.
+        Returns:
+            pd.DataFrame: DataFrame contendo os valores do parâmetro e da variável especificada.
+        """
+        if param not in ["N1", "N2"]:
+            raise ValueError("Parâmetro inválido. Use 'N1' ou 'N2'.")
+
+        if not hasattr(self, '_design_point'):
+            raise ValueError("Ponto de projeto não definido. Execute save_design_point() após a calibração.")
+        y_values = []
+        n1_range = []
+        for N2 in n2_range:
+            self.update_from_N2(N2)
+            n1_range.append(self.N1_ratio)
+            if value_name == "tsfc":
+                y_values.append(self.get_tsfc())
+            elif value_name == "N1":
+                y_values.append(self.N1_ratio)
+            elif value_name == "thrust":
+                y_values.append(self.get_thrust())
+            elif value_name == "prc":
+                y_values.append(self.prc)
+            elif value_name == "pr":
+                y_values.append(self.prc * self.prf)
+            elif value_name == "u_core":
+                y_values.append(self.u_core)
+            elif value_name == "t04":
+                y_values.append(self.t04)
+            elif value_name == "fuel_consumption":
+                y_values.append(self.get_fuel_consumption())
+            else:
+                try:
+                    y_values.append(getattr(self, value_name))
+                except AttributeError:
+                    raise ValueError(f"Nome de variável inválido: {value_name}")
+        if param == "N2":
+            x_values = n2_range
+        else:
+            x_values = n1_range
+
+        df = pd.DataFrame({param: x_values, value_name: y_values})
+
+        return df.round(4)
 
     def set_t04(self, t04: float):
         """
@@ -194,7 +263,16 @@ class Turbofan:
         self.t04 = t04
         self.update_turbofan_components()
 
+
     def update_turbofan_components(self):
+        """
+        Atualiza os componentes do turbofan com base nos parâmetros atuais.
+
+        Esta função instancia e atualiza todos os componentes principais do motor:
+        difusor (inlet), fan, compressor, câmara de combustão, turbinas, bocais e calcula
+        as propriedades relevantes em cada estação do ciclo termodinâmico.
+        """
+
         # 1. Difusor
         self.inlet = Inlet(self.t_a, self.p_a, self.mach, self.eta_inlet, self.gamma_inlet)
         self.t02 = self.inlet.get_total_temperature()
@@ -219,12 +297,15 @@ class Turbofan:
             self.Cp,
             self.t04,
             self.eta_camara,
+            self.gamma_camara,
             self.kerosene_PCI,
             self.hydrogen_PCI,
             self.hydrogen_fraction,
-            self.pressure_loss_factor,
+            self.pressure_loss,
         )
         self.p04 = self.combustion_chamber.get_total_pressure()
+        # Calcula novamente t04 para levar em conta possível perda de pressão
+        self.t04 = self.combustion_chamber.get_total_temperature_out()
         self.fuel_to_air_ratio = self.combustion_chamber.get_fuel_to_air_ratio()
 
         # 5. Turbina do compressor
@@ -251,6 +332,9 @@ class Turbofan:
         )
         self.t06 = self.fan_turbine.get_total_temperature()
         self.p06 = self.fan_turbine.get_total_pressure()
+        if self.p06 < self.p_a:
+            self.p06 = self.p_a
+            # raise ValueError("A pressão de saída da turbina do fan é menor que a pressão ambiente.")
 
         # 7. Bocal dos gases quentes
         self.core_nozzle = Nozzle(
@@ -277,9 +361,14 @@ class Turbofan:
         # 9. Velocidade de voo
         self.u_flight = self.get_flight_speed()
 
+
     # Velocidade de Voo
     def get_flight_speed(self):
+        """
+        Calcula a velocidade de voo baseada no Mach e nas propriedades do ar.
+        """
         return self.mach * np.sqrt(self.gamma_inlet * self.mean_R_air * self.t_a)
+
 
     # Empuxo Específico
     def get_specific_thrust(self):
@@ -296,46 +385,111 @@ class Turbofan:
         term2 = self.bpr * (self.u_fan - self.u_flight)
         return (term1 + term2) / 1000
 
+
     # Consumo Específico (TSFC)
     def get_tsfc(self):
+        """
+        Calcula o consumo específico de combustível (TSFC) do turbofan.
+
+        TSFC (Thrust Specific Fuel Consumption) é definido como a razão entre a vazão de combustível e o empuxo específico.
+
+        Returns:
+            float: TSFC em kg/(kN.s)
+        """
         return self.fuel_to_air_ratio / self.get_specific_thrust()
+
 
     # Vazão de ar
     def set_sea_level_air_flow(self, sea_level_air_flow: float):
+        """
+        Define a vazão de ar ao nível do mar e atualiza a vazão corrigida para as condições atuais.
+
+        Args:
+            sea_level_air_flow (float): Vazão de ar ao nível do mar (kg/s).
+        """
         self.sea_level_air_flow = sea_level_air_flow
 
         correction_factor = (SEA_LEVEL_TEMPERATURE / SEA_LEVEL_PRESSURE) * (self.p_a / self.t_a)
         self.air_flow = sea_level_air_flow * correction_factor
         self.update_turbofan_components()
 
+
     def get_sea_level_air_flow(self):
+        """
+        Retorna a vazão de ar ao nível do mar.
+
+        Returns:
+            float: Vazão de ar ao nível do mar (kg/s).
+
+        Raises:
+            ValueError: Se a vazão de ar não estiver definida.
+        """
         if self.sea_level_air_flow is None:
             raise ValueError("Vazão de ar não definida.")
         else:
             return self.sea_level_air_flow
 
+
     def set_air_flow(self, air_flow: float):
+        """
+        Define a vazão de ar corrigida para as condições atuais e atualiza a vazão ao nível do mar.
+
+        Args:
+            air_flow (float): Vazão de ar corrigida (kg/s).
+        """
         self.air_flow = air_flow
         correction_factor = (SEA_LEVEL_TEMPERATURE / SEA_LEVEL_PRESSURE) * (self.p_a / self.t_a)
         self.sea_level_air_flow = air_flow / correction_factor
         self.update_turbofan_components()
 
+
     def get_air_flow(self):
+        """
+        Retorna a vazão de ar corrigida para as condições atuais.
+
+        Returns:
+            float: Vazão de ar corrigida (kg/s).
+
+        Raises:
+            ValueError: Se a vazão de ar não estiver definida.
+        """
         if self.air_flow is None:
             raise ValueError("Vazão de ar não definida.")
         else:
             return self.air_flow
 
+
     def get_hot_air_flow(self):
+        """
+        Retorna a vazão de ar quente (núcleo do motor).
+
+        Returns:
+            float: Vazão de ar quente (kg/s).
+        """
         return self.get_air_flow() / (self.bpr + 1)
+
 
     # Empuxo
     def get_thrust(self):
+        """
+        Calcula o empuxo total do motor turbofan.
+
+        Returns:
+            float: Empuxo total (kN).
+        """
         return self.get_specific_thrust() * self.get_hot_air_flow()
+
 
     # Consumo de combustível
     def get_fuel_consumption(self):
+        """
+        Calcula o consumo total de combustível do motor turbofan.
+
+        Returns:
+            float: Consumo de combustível (kg/s).
+        """
         return self.fuel_to_air_ratio * self.get_hot_air_flow()
+
 
     def print_config(self):
         """
@@ -353,6 +507,12 @@ class Turbofan:
         print(f"{'Razão de Pressão - Fan (Prf)':<28}: {self.prf:.3f}")
         print(f"{'Razão de Pressão - Booster (Pr_bst)':<28}: {self.pr_bst or 1.0:.3f}")
         print(f"{'Razão de Pressão - Comp. (Prc)':<28}: {self.prc:.3f}")
+        print(f"{'Fração de Hidrogênio':<28}: {self.hydrogen_fraction:.3f}")
+        print(f"{'Perda de Pressão (%)':<28}: {self.pressure_loss*100:.1f}%")
+        print(f"{'PCI Querosene':<28}: {self.kerosene_PCI:.1f} kJ/kg")
+        print(f"{'PCI Hidrogênio':<28}: {self.hydrogen_PCI:.1f} kJ/kg")
+        print(f"{'Constante dos Gases (R_ar)':<28}: {self.mean_R_air:.3f} m²/(s²·K)")
+        print(f"{'Calor Específico (Cp)':<28}: {self.Cp:.3f} kJ/(kg·K)")
         print(f"{'Temp. Entrada Turbina (T04)':<28}: {self.t04:.3f} K")
         if self.air_flow is not None:
             print(f"{'Vazão de Ar Total':<28}: {self.air_flow:.3f} kg/s")
@@ -374,6 +534,8 @@ class Turbofan:
         print(f"{'Bocal Frio (Fan)':<25} | {self.eta_bocal_fan:<20.3f} | {self.gamma_bocal_fan:<15.3f}")
         print("\n" + "-" * 66)
 
+
+    # Print dos Outputs
     def print_outputs(self):
         """
         Imprime os resultados calculados do motor de forma organizada.
@@ -412,6 +574,8 @@ class Turbofan:
 
         print("\n" + "-" * 61)
 
+
+    # Calibração do Turbofan
     def calibrate_turbofan(
             self,
             rated_thrust_kN: float,
@@ -496,6 +660,7 @@ class Turbofan:
             "final_tsfc": round(self.get_tsfc(), 5),
         }
 
+
     def plot_calibration_result(self, target_tsfc: float, t04_range: ndarray = np.arange(1200, 2000, 10)):
         original_t04 = self.t04
 
@@ -525,86 +690,10 @@ class Turbofan:
         # Restaurar o valor original de T04
         self.set_t04(original_t04)
 
-    def get_config(self):
-        """
-        Retorna um dicionário com todos os parâmetros de configuração do turbofan.
-        Returns:
-        dict: Dicionário contendo todos os parâmetros do turbofan.
-        """
-        return {
-            "mach": self.mach,
-            "altitude": self.altitude,
-            "t_a": self.t_a,
-            "p_a": self.p_a,
-            "eta_inlet": self.eta_inlet,
-            "gamma_inlet": self.gamma_inlet,
-            "eta_fan": self.eta_fan,
-            "gamma_fan": self.gamma_fan,
-            "eta_compressor": self.eta_compressor,
-            "gamma_compressor": self.gamma_compressor,
-            "eta_camara": self.eta_camara,
-            "gamma_camara": self.gamma_camara,
-            "eta_turbina_compressor": self.eta_turbina_compressor,
-            "gamma_turbina_compressor": self.gamma_turbina_compressor,
-            "eta_turbina_fan": self.eta_turbina_fan,
-            "gamma_turbina_fan": self.gamma_turbina_fan,
-            "eta_bocal_quente": self.eta_bocal_quente,
-            "gamma_bocal_quente": self.gamma_bocal_quente,
-            "eta_bocal_fan": self.eta_bocal_fan,
-            "gamma_bocal_fan": self.gamma_bocal_fan,
-            "bpr": self.bpr,
-            "prf": self.prf,
-            "pr_bst": self.pr_bst,
-            "prc": self.prc,
-            "hydrogen_fraction": self.hydrogen_fraction,
-            "pressure_loss_factor": self.pressure_loss_factor,
-            "kerosene_PCI": self.kerosene_PCI,
-            "hydrogen_PCI": self.hydrogen_PCI,
-            "mean_R_air": self.mean_R_air,
-            "Cp": self.Cp,
-            "T04": self.t04,
-            "air_flow": self.air_flow
-        }
-
 
 if __name__ == "__main__":
-    config_ex73 = {
-        "mach": 0.45,
-        "altitude": 7000 * 0.3048,
-        "t_a": 246.55,
-        "p_a": 41.0,
-
-        # Eficiências e Gammas
-        "eta_inlet": 0.97,
-        "gamma_inlet": 1.4,
-        "eta_fan": 0.9,
-        "gamma_fan": 1.4,
-        "eta_compressor": 0.75,
-        "gamma_compressor": 1.37,
-        "eta_camara": 0.9995,
-        "gamma_camara": 1.35,
-        "eta_turbina_compressor": 0.9,
-        "gamma_turbina_compressor": 1.33,
-        "eta_turbina_fan": 0.9,
-        "gamma_turbina_fan": 1.33,
-        "eta_bocal_quente": 0.98,
-        "gamma_bocal_quente": 1.36,
-        "eta_bocal_fan": 0.98,
-        "gamma_bocal_fan": 1.4,
-
-        # Dados operacionais
-        "bpr": 4.2,
-        "prf": 1.5,
-        "prc": 8.33,
-        "hydrogen_fraction": 0.0,
-        "pressure_loss_factor": 1.0,
-        "kerosene_PCI": 45e3,  # kJ/kg
-        "hydrogen_PCI": 120e3,  # kJ/kg
-        "mean_R_air": 288.3,  # (m^2 / (s^2*K))
-        "Cp": 1.11,  # (kJ / (kg*K))
-        "T04": 1550,  # (K)
-    }
-    turbofan = Turbofan(config_ex73)
-    turbofan.set_sea_level_air_flow(88.42)
+    from utils.configs import config_ex23
+    turbofan = Turbofan(config_ex23)
+    turbofan.set_sea_level_air_flow(756)
     turbofan.save_design_point()
-    turbofan.update_from_N2(0.85)
+    turbofan.update_from_N2(0.8)

@@ -4,7 +4,7 @@ def model_corrections(is_turbofan=True):
     models = {}
 
     # Correções de rotação e bypass
-    models['N1_from_N2'] = np.poly1d([1.41661, -4.0478e-1])  # N1/N1_design = f(N2/N2_design)
+    models['N1_from_N2'] = np.poly1d([1.4166, -4.0478e-1])  # N1/N1_design = f(N2/N2_design)
     models['B_from_N1'] = np.poly1d([-8.3241e-1, 3.8824e-1, 1.4263])  # BPR/BPR_design = f(N1/N1_design)
 
     # Coeficientes para Prf
@@ -21,10 +21,10 @@ def model_corrections(is_turbofan=True):
     # Correções de eficiência
     models['eta_f_from_N1'] = np.poly1d(
         [-6.6663, 17.752, -17.469, 7.7181, -0.32985])  # ηf/ηf_design = f(N1/N1_design)
-    models['eta_c_from_N2'] = np.poly1d([-1.1234, 2.1097, 0.018617])  # ηc/ηc_design = f(N2/N2_design)
+    models['eta_c_from_N2'] = np.poly1d([-1.1234, 2.1097, 1.8617e-2])  # ηc/ηc_design = f(N2/N2_design)
     models['eta_tf_from_N1'] = np.poly1d([-6.7490e-2, 0.25640, 0.81153])  # ηtf/ηtf_design = f(N1/N1_design)
     models['eta_t_from_N2'] = np.poly1d([-6.7490e-2, 0.25640, 0.81153])  # ηt/ηt_design = f(N2/N2_design)
-    models['eta_b_from_N2'] = np.poly1d([1.1630, -3.0851, 2.7312, 0.19130])  # ηb/ηb_design = f(N2/N2_design)
+    models['eta_b_from_N2'] = np.poly1d([1.1630, -3.0851, 2.7312, 1.9130e-1])  # ηb/ηb_design = f(N2/N2_design)
 
     # Correção de vazão mássica
     models['m_dot_H_from_N2'] = np.poly1d([-6.6970, 1.7001e1, -1.2170e1, 2.8717])  # ṁ_H/ṁ_H_design = f(N2/N2_design)

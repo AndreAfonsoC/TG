@@ -138,6 +138,20 @@ class PowerTurbine:
         w_tl = self.get_real_work()
         return self.t0_in - (w_tl / self.cp_tl)
 
+    def get_total_air_flow(self, air_flow: float, fuel_to_air_ratio: float) -> float:
+        """
+        Calcula a vazão na turbina livre.
+
+        Args:
+            air_flow (float): Vazão mássica de ar através da turbina [kg/s].
+            fuel_to_air_ratio (float): Razão combustível / ar da câmara de combustão  [adimensional].
+
+        Returns:
+            float: Vazão de ar que passa pela turbina livre, considerando ar + combustível [kg/s].
+        """
+        return air_flow * (1 + fuel_to_air_ratio)
+
+
     def get_power(self, air_flow: float, fuel_to_air_ratio: float) -> float:
         """
         Calcula a potência fornecida pela turbina livre (pot_tl).
@@ -150,4 +164,5 @@ class PowerTurbine:
             float: Potência fornecida pela turbina livre [W].
         """
         w_tl = self.get_real_work()
-        return w_tl * air_flow * (1 + fuel_to_air_ratio)
+        return w_tl * self.get_total_air_flow(air_flow, fuel_to_air_ratio)
+

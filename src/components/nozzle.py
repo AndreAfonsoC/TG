@@ -1,5 +1,6 @@
 import math
 
+
 class Nozzle:
     """
     Representa um bocal de exaustão de um motor a jato.
@@ -53,9 +54,11 @@ class Nozzle:
             raise ValueError("A razão de calores específicos (gamma_n) não pode ser 1.")
         if self.p0_in == 0:
             raise ValueError("A pressão total de entrada (p0_in) não pode ser zero.")
-        if self.p_a / self.p0_in > 1:
-            # Se a pressão ambiente for maior, não há expansão; a fórmula daria erro.
+        if self.p_a > self.p0_in:
             return 0.0
+            # Se a pressão ambiente for maior, não há expansão; a fórmula daria erro.
+            # raise ValueError(f"Pressão ambiente ({self.p_a}) maior que a pressão de entrada no bocal dos "
+            #                  f"gases quentes ({self.p0_in}).")
 
         # --- Cálculo por partes para clareza ---
         # Termo 1: (2 * eta * gamma * mean_r_air * T0) / (gamma - 1)
@@ -72,5 +75,3 @@ class Nozzle:
         velocity_squared = term1 * term2
 
         return math.sqrt(velocity_squared)
-
-
