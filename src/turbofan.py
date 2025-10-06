@@ -103,6 +103,7 @@ class Turbofan:
         self.hydrogen_PCI = self.final_config["hydrogen_PCI"]
         self.mean_R_air = self.final_config["mean_R_air"]
         self.Cp = self.final_config["Cp"]
+        self.t04_without_loss = self.final_config["T04"]
         self.t04 = self.final_config["T04"]
         self.sea_level_air_flow = None
         self.air_flow = None
@@ -140,7 +141,7 @@ class Turbofan:
             'prf': self.prf,
             'pr_bst': self.pr_bst,
             'prc': self.prc,
-            't04': self.t04,
+            't04': self.t04_without_loss,
             'eta_fan': self.eta_fan,
             'eta_compressor': self.eta_compressor,
             'eta_camara': self.eta_camara,
@@ -164,42 +165,54 @@ class Turbofan:
         models = self._correction_models
         N2_ratio = N2 / N2_design
 
-        if N2_ratio == 1:
-            # Se estiver no ponto de projeto, não faz nada
-            return
+        # Se estiver no ponto de projeto, não faz nada (todos coeficientes são 1)
+        if abs(N2_ratio - 1.0) <= 1e-4:
+            self.N1_ratio = 1.0
+            self.bpr = self._design_point['bpr']
+            self.prf = self._design_point['prf']
+            if self._design_point['pr_bst']:
+                self.pr_bst = self._design_point['pr_bst']
+            self.prc = self._design_point['prc']
+            self.t04 = self._design_point['t04']
+            self.eta_fan = self._design_point['eta_fan']
+            self.eta_compressor = self._design_point['eta_compressor']
+            self.eta_turbina_fan = self._design_point['eta_turbina_fan']
+            self.eta_turbina_compressor = self._design_point['eta_turbina_compressor']
+            self.eta_camara = self._design_point['eta_camara']
+            self.set_sea_level_air_flow(self._design_point['sea_level_air_flow'])
+        else:
+            N1_ratio = models['N1_from_N2'](N2_ratio)
+            self.N1_ratio = N1_ratio
+            self.N2_ratio = N2_ratio
 
-        N1_ratio = models['N1_from_N2'](N2_ratio)
-        self.N1_ratio = N1_ratio
-        self.N2_ratio = N2_ratio
+            # --- 1. Resolver as dependências iniciais ---
+            B_ratio = models['B_from_N1'](N1_ratio)
+            self.bpr = self._design_point['bpr'] * B_ratio
 
-        # --- 1. Resolver as dependências iniciais ---
-        B_ratio = models['B_from_N1'](N1_ratio)
-        self.bpr = self._design_point['bpr'] * B_ratio
+            # --- 2. Calcular Prf ---
+            A = models['A_from_B'](self.bpr)
+            C = models['C_from_B'](self.bpr)
+            p_prf = np.poly1d([A, -4.3317e-2, C])
+            self.prf = self._design_point['prf'] * p_prf(N1_ratio)
 
-        # --- 2. Calcular Prf ---
-        A = models['A_from_B'](self.bpr)
-        C = models['C_from_B'](self.bpr)
-        p_prf = np.poly1d([A, -4.3317e-2, C])
-        self.prf = self._design_point['prf'] * p_prf(N1_ratio)
+            # --- 3. Atualizar demais parâmetros ---
+            # Pressões e Temperaturas
+            if self._design_point['pr_bst']:
+                self.pr_bst = self._design_point['pr_bst'] * models['Pr_bst_from_N1'](N1_ratio)
+            self.prc = self._design_point['prc'] * models['Prc_from_N2'](N2_ratio)
+            self.t04 = self._design_point['t04'] * models['T04_from_N2'](N2_ratio)
 
-        # --- 3. Atualizar demais parâmetros ---
-        # Pressões e Temperaturas
-        if self._design_point['pr_bst']:
-            self.pr_bst = self._design_point['pr_bst'] * models['Pr_bst_from_N1'](N1_ratio)
-        self.prc = self._design_point['prc'] * models['Prc_from_N2'](N2_ratio)
-        self.t04 = self._design_point['t04'] * models['T04_from_N2'](N2_ratio)
+            # Eficiências
+            self.eta_fan = self._design_point['eta_fan'] * models['eta_f_from_N1'](N1_ratio)
+            self.eta_compressor = self._design_point['eta_compressor'] * models['eta_c_from_N2'](N2_ratio)
+            self.eta_turbina_fan = self._design_point['eta_turbina_fan'] * models['eta_tf_from_N1'](N1_ratio)
+            self.eta_turbina_compressor = self._design_point['eta_turbina_compressor'] * models['eta_t_from_N2'](N2_ratio)
+            self.eta_camara = self._design_point['eta_camara'] * models['eta_b_from_N2'](N2_ratio)
 
-        # Eficiências
-        self.eta_fan = self._design_point['eta_fan'] * models['eta_f_from_N1'](N1_ratio)
-        self.eta_compressor = self._design_point['eta_compressor'] * models['eta_c_from_N2'](N2_ratio)
-        self.eta_turbina_fan = self._design_point['eta_turbina_fan'] * models['eta_tf_from_N1'](N1_ratio)
-        self.eta_turbina_compressor = self._design_point['eta_turbina_compressor'] * models['eta_t_from_N2'](N2_ratio)
-        self.eta_camara = self._design_point['eta_camara'] * models['eta_b_from_N2'](N2_ratio)
-
-        # Vazão mássica (nesse caso hot_air_flow é igual a air_flow)
-        hot_air_flow_ratio = models['m_dot_H_from_N2'](N2_ratio)
-        hot_air_flow = self._design_point['sea_level_air_flow'] * hot_air_flow_ratio
-        self.set_sea_level_air_flow(hot_air_flow)
+            # Vazão mássica (nesse caso hot_air_flow é igual a air_flow)
+            hot_air_flow_ratio = models['m_dot_H_from_N2'](N2_ratio)
+            hot_air_flow = self._design_point['sea_level_air_flow'] * hot_air_flow_ratio
+            self.set_sea_level_air_flow(hot_air_flow)
 
     def get_values_by_changing_param(
             self,
@@ -238,6 +251,8 @@ class Turbofan:
                 y_values.append(self.prc * self.prf)
             elif value_name == "u_core":
                 y_values.append(self.u_core)
+            elif value_name == "hot_air_flow":
+                y_values.append(self.get_hot_air_flow())
             elif value_name == "t04":
                 y_values.append(self.t04)
             elif value_name == "fuel_consumption":
@@ -332,9 +347,6 @@ class Turbofan:
         )
         self.t06 = self.fan_turbine.get_total_temperature()
         self.p06 = self.fan_turbine.get_total_pressure()
-        if self.p06 < self.p_a:
-            self.p06 = self.p_a
-            # raise ValueError("A pressão de saída da turbina do fan é menor que a pressão ambiente.")
 
         # 7. Bocal dos gases quentes
         self.core_nozzle = Nozzle(
@@ -679,7 +691,23 @@ class Turbofan:
 
 if __name__ == "__main__":
     from utils.configs import config_ex23
+
     turbofan = Turbofan(config_ex23)
     turbofan.set_sea_level_air_flow(756)
+    turbofan.print_outputs()
     turbofan.save_design_point()
-    turbofan.update_from_N2(0.8)
+    turbofan.update_from_N2(1.0)
+    turbofan.print_outputs()
+    var_and_unit = {
+        "thrust": "kN",
+    }
+    for variable, unit in var_and_unit.items():
+        if variable in ["prf", "bpr"]:
+            param = "N1"
+            range_x = [0.2, 1.0]
+        else:
+            param = "N2"
+            range_x = [0.4, 1.0]
+        df = turbofan.get_values_by_changing_param(variable, param)
+    turbofan.print_outputs()
+

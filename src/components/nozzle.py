@@ -55,10 +55,9 @@ class Nozzle:
         if self.p0_in == 0:
             raise ValueError("A pressão total de entrada (p0_in) não pode ser zero.")
         if self.p_a > self.p0_in:
+            print(f"WARNING: A pressão ambiente ({self.p_a:.2f}) é maior que a pressão total de entrada do bocal "
+                  f"({self.p0_in:.2f}), por isso retornou-se velocidade nula no bocal!!!")
             return 0.0
-            # Se a pressão ambiente for maior, não há expansão; a fórmula daria erro.
-            # raise ValueError(f"Pressão ambiente ({self.p_a}) maior que a pressão de entrada no bocal dos "
-            #                  f"gases quentes ({self.p0_in}).")
 
         # --- Cálculo por partes para clareza ---
         # Termo 1: (2 * eta * gamma * mean_r_air * T0) / (gamma - 1)

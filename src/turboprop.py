@@ -320,6 +320,11 @@ class Turboprop:
 
         models = self._correction_models
         N2_ratio = N2 / N2_design
+
+        if N2_ratio == 1:
+            # Se estiver no ponto de projeto, não faz nada
+            return
+
         N1_ratio = models['N1_from_N2'](N2_ratio)
         self.N1_ratio = N1_ratio
         self.N2_ratio = N2_ratio
