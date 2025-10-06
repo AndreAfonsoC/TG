@@ -495,44 +495,30 @@ class Turbofan:
         """
         Imprime as características de configuração do motor de forma organizada.
         """
-        print("--- Configuração do Motor Turbofan ---")
-        print("\n[ Condições de Voo e Ambiente ]")
-        print(f"{'Mach de voo':<28}: {self.mach:.3f}")
-        print(f"{'Altitude':<28}: {self.altitude:.3f} ft")
-        print(f"{'Temperatura Ambiente (T_a)':<28}: {self.t_a:.3f} K")
-        print(f"{'Pressão Ambiente (P_a)':<28}: {self.p_a:.3f} kPa")
+        print("\n--- Configuração do Motor Turboprop ---")
+        max_key_len = max(len(key) for key in self.final_config.keys())
 
-        print("\n[ Parâmetros Operacionais ]")
-        print(f"{'Bypass Ratio (BPR)':<28}: {self.bpr:.3f}")
-        print(f"{'Razão de Pressão - Fan (Prf)':<28}: {self.prf:.3f}")
-        print(f"{'Razão de Pressão - Booster (Pr_bst)':<28}: {self.pr_bst or 1.0:.3f}")
-        print(f"{'Razão de Pressão - Comp. (Prc)':<28}: {self.prc:.3f}")
-        print(f"{'Fração de Hidrogênio':<28}: {self.hydrogen_fraction:.3f}")
-        print(f"{'Perda de Pressão (%)':<28}: {self.pressure_loss*100:.1f}%")
-        print(f"{'PCI Querosene':<28}: {self.kerosene_PCI:.1f} kJ/kg")
-        print(f"{'PCI Hidrogênio':<28}: {self.hydrogen_PCI:.1f} kJ/kg")
-        print(f"{'Constante dos Gases (R_ar)':<28}: {self.mean_R_air:.3f} m²/(s²·K)")
-        print(f"{'Calor Específico (Cp)':<28}: {self.Cp:.3f} kJ/(kg·K)")
-        print(f"{'Temp. Entrada Turbina (T04)':<28}: {self.t04:.3f} K")
-        if self.air_flow is not None:
-            print(f"{'Vazão de Ar Total':<28}: {self.air_flow:.3f} kg/s")
-        else:
-            print(f"{'Vazão de Ar Total':<28}: Não definida")
+        # Categorias para melhor organização visual
+        enviroment_cat = ["mach", "altitude", "t_a", "p_a"]
+        eff_cat = [k for k in self.final_config if k.startswith("eta_")]
+        gamma_cat = [k for k in self.final_config if k.startswith("gamma_")]
+        ops_cat = [k for k in self.final_config if k not in eff_cat + gamma_cat + enviroment_cat]
+        categories = {
+            "Condições de Voo e Ambiente": enviroment_cat,
+            "Eficiências": eff_cat,
+            "Gammas": gamma_cat,
+            "Dados Operacionais": ops_cat,
+        }
 
-        print("\n[ Propriedades dos Componentes ]")
-        header = f"{'Componente':<25} | {'Eficiência (eta)':<20} | {'Gamma':<15}"
-        print(header)
-        print("-" * len(header))
-        print(f"{'Inlet':<25} | {self.eta_inlet:<20.3f} | {self.gamma_inlet:<15.3f}")
-        print(f"{'Fan':<25} | {self.eta_fan:<20.3f} | {self.gamma_fan:<15.3f}")
-        print(f"{'Compressor':<25} | {self.eta_compressor:<20.3f} | {self.gamma_compressor:<15.3f}")
-        print(f"{'Câmara de Combustão':<25} | {self.eta_camara:<20.3f} | {self.gamma_camara:<15.3f}")
-        print(
-            f"{'Turbina do Compressor':<25} | {self.eta_turbina_compressor:<20.3f} | {self.gamma_turbina_compressor:<15.3f}")
-        print(f"{'Turbina do Fan':<25} | {self.eta_turbina_fan:<20.3f} | {self.gamma_turbina_fan:<15.3f}")
-        print(f"{'Bocal Quente':<25} | {self.eta_bocal_quente:<20.3f} | {self.gamma_bocal_quente:<15.3f}")
-        print(f"{'Bocal Frio (Fan)':<25} | {self.eta_bocal_fan:<20.3f} | {self.gamma_bocal_fan:<15.3f}")
-        print("\n" + "-" * 66)
+        for category, keys in categories.items():
+            print(f"\n[{category}]")
+            for key in keys:
+                value = self.final_config.get(key)
+                if isinstance(value, (int, float)):
+                    print(f"{key:<{max_key_len}}: {value:.3f}")
+                else:
+                    print(f"{key:<{max_key_len}}: {value}")
+        print("\n" + "-" * (max_key_len + 10))
 
 
     # Print dos Outputs
