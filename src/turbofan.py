@@ -190,8 +190,8 @@ class Turbofan:
             self.bpr = self._design_point['bpr'] * B_ratio
 
             # --- 2. Calcular Prf ---
-            A = models['A_from_B'](self.bpr)
-            C = models['C_from_B'](self.bpr)
+            A = models['A_from_B_design'](self._design_point['bpr'])
+            C = models['C_from_B_design'](self._design_point['bpr'])
             p_prf = np.poly1d([A, -4.3317e-2, C])
             self.prf = self._design_point['prf'] * p_prf(N1_ratio)
 

@@ -8,8 +8,8 @@ def model_corrections(is_turbofan=True):
     models['B_from_N1'] = np.poly1d([-8.3241e-1, 3.8824e-1, 1.4263])  # BPR/BPR_design = f(N1/N1_design)
 
     # Coeficientes para Prf
-    models['A_from_B'] = np.poly1d([-0.00179, 0.00687, 0.5])  # A = f(B/B_design)
-    models['C_from_B'] = np.poly1d([0.011, 0.53782])  # C = f(B/B_design)
+    models['A_from_B_design'] = np.poly1d([-0.00179, 0.00687, 0.5])  # A = f(B/B_design)
+    models['C_from_B_design'] = np.poly1d([0.011, 0.53782])  # C = f(B/B_design)
 
     # Correções de pressão
     models['Pr_bst_from_N1'] = np.poly1d([4.8967e-1, -4.3317e-2, 5.6846e-1])  # Prc/Prc_design = f(N2/N2_design)
