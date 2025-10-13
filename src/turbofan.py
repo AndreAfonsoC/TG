@@ -337,6 +337,10 @@ class Turbofan:
         self.p05 = self.compressor_turbine.get_total_pressure()
 
         # 6. Turbina do fan
+        if hasattr(self, "_design_point"):
+            bpr_design = self._design_point['bpr']
+        else:
+            bpr_design = self.bpr
         self.fan_turbine = Turbine(
             self.t05,
             self.p05,
@@ -344,7 +348,7 @@ class Turbofan:
             self.t08,
             self.eta_turbina_fan,
             self.gamma_turbina_fan,
-            self.bpr
+            bpr_design
         )
         self.t06 = self.fan_turbine.get_total_temperature()
         self.p06 = self.fan_turbine.get_total_pressure()
