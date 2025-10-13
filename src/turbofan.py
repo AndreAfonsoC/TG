@@ -149,6 +149,7 @@ class Turbofan:
             'eta_turbina_compressor': self.eta_turbina_compressor,
             'eta_bocal_quente': self.eta_bocal_quente,
             'sea_level_air_flow': self.sea_level_air_flow,
+            'rated_thrust': self.get_thrust(),
         }
 
     def update_from_N2(self, N2: float, N2_design: float = 1.0):
@@ -566,6 +567,11 @@ class Turbofan:
         print(f"{'Empuxo Específico':<32}: {self.get_specific_thrust():.5f} kN.s/kg")
         print(f"{'Consumo Específico (TSFC)':<32}: {self.get_tsfc():.5f} kg/(kN.s)")
 
+        if hasattr(self, 'N2_ratio'):
+            print(f"{'N2':<35}: {self.N2_ratio:.3f}")
+        if hasattr(self, 'N1_ratio'):
+            print(f"{'N1':<35}: {self.N1_ratio:.3f}")
+
         if self.air_flow is not None:
             print(f"{'Empuxo Total':<32}: {self.get_thrust():.3f} kN")
             print(f"{'Consumo de Combustível':<32}: {self.get_fuel_consumption():.3f} kg/s")
@@ -618,6 +624,7 @@ class Turbofan:
 
         optimal_t04 = float(res_t04.x)
         self.set_t04(optimal_t04)
+        self.t04_without_loss = optimal_t04  # Atualiza T04 sem perda para salvar no ponto de projeto
 
         # 2) Otimizar somente vazão mássica para atingir o empuxo (T04 fixo)
         def obj_mdot(m_dot):
@@ -688,26 +695,83 @@ class Turbofan:
         # Restaurar o valor original de T04
         self.set_t04(original_t04)
 
+    def update_environment(
+            self,
+            mach: float = None,
+            altitude: float = None,
+            t_a: float = None,
+            p_a: float = None,
+            delta_temp: float = 0.0,
+            percentage_of_rated_thrust: float = 1.0,
+    ):
+        """
+        Atualiza as condições de voo e encontra a rotação N2 para atingir um percentual do empuxo de projeto.
+
+        Args:
+            mach (float): Número de Mach.
+            altitude (float): Altitude em pés.
+            t_a (float, optional): Temperatura ambiente em K. Se None, calcula a partir da altitude.
+            p_a (float, optional): Pressão ambiente em kPa. Se None, calcula a partir da altitude.
+            percentage_of_rated_thrust (float, optional): Percentual do empuxo de projeto a ser atingido.
+                                                         Se fornecido, otimiza N2 para encontrar o empuxo alvo.
+        """
+        if not hasattr(self, '_design_point'):
+            raise ValueError("Ponto de projeto não definido. Execute save_design_point() após a calibração.")
+
+        # 1. Atualiza as condições de ambiente e voo
+        if mach is not None:
+            self.mach = mach
+        if altitude is not None:
+            self.altitude = altitude
+            self.t_a, self.p_a, _, _ = atmosphere(self.altitude * ft2m, SEA_LEVEL_TEMPERATURE + delta_temp)
+            self.p_a = self.p_a / 1000  # Divide por 1000 para passar para kPa
+        if t_a:
+            self.t_a = t_a
+        if p_a:
+            self.p_a = p_a
+
+        # Se nenhum percentual de empuxo for fornecido, apenas atualiza os componentes e retorna.
+        if percentage_of_rated_thrust is None:
+            self.update_turbofan_components()
+            return
+
+        # 2. Define o empuxo alvo
+        target_thrust = self._design_point['rated_thrust'] * percentage_of_rated_thrust
+
+        # 3. Define a função objetivo para o otimizador
+        def objective_function(n2_ratio):
+            self.update_from_N2(n2_ratio)
+            current_thrust = self.get_thrust()
+            # Minimiza o erro quadrático relativo
+            return ((current_thrust - target_thrust) / target_thrust) ** 2
+
+        # 4. Executa a otimização para encontrar o N2
+        result = minimize_scalar(
+            objective_function,
+            bounds=(0.0, 1.0),  # Limites razoáveis para a busca de N2
+            method='bounded',
+            options={'xatol': 1e-6}
+        )
+
+        if not result.success:
+            raise RuntimeError(f"Otimização de N2 para empuxo falhou: {result.message}")
+
+        if result.fun > 0.01 or result.x >= 0.99 or result.x <= 0.01:
+            print(f"Aviso: A otimização de N2 não convergiu suficientemente. Erro final: {result.fun:.4f}")
+            print("Voltando N2 para 100% do valor de projeto.")
+            self.update_from_N2(1.0)
+            return
+
+        # 5. Garante que o motor esteja no estado ótimo encontrado
+        optimal_n2 = result.x
+        self.update_from_N2(optimal_n2)
 
 if __name__ == "__main__":
-    from utils.configs import config_ex23
-
-    turbofan = Turbofan(config_ex23)
-    turbofan.set_sea_level_air_flow(756)
-    turbofan.print_outputs()
-    turbofan.save_design_point()
-    turbofan.update_from_N2(1.0)
-    turbofan.print_outputs()
-    var_and_unit = {
-        "thrust": "kN",
-    }
-    for variable, unit in var_and_unit.items():
-        if variable in ["prf", "bpr"]:
-            param = "N1"
-            range_x = [0.2, 1.0]
-        else:
-            param = "N2"
-            range_x = [0.4, 1.0]
-        df = turbofan.get_values_by_changing_param(variable, param)
-    turbofan.print_outputs()
-
+    from utils.configs import config_turbofan
+    turbofan = Turbofan(config_turbofan)
+    turbofan.set_air_flow(100)
+    rated_thrust = 121.4  # kN
+    fuel_flow = 1.293  # kg/s
+    optimization_status = turbofan.calibrate_turbofan(rated_thrust, fuel_flow)
+    # turbofan.plot_calibration_result(fuel_flow / rated_thrust, np.arange(1200, 2000, 0.1))
+    turbofan.update_environment(mach=0.0, percentage_of_rated_thrust=1)
