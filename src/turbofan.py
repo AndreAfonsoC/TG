@@ -11,7 +11,7 @@ from src.components.compressor import Compressor
 from src.components.inlet import Inlet
 from src.components.nozzle import Nozzle
 from src.components.turbine import Turbine
-from utils.aux_tools import atmosphere, ft2m
+from utils.aux_tools import atmosphere, ft2m, CO2_PER_KEROSENE_MASS, H2O_PER_KEROSENE_MASS, H2O_PER_HYDROGEN_MASS
 from utils.corrections import model_corrections
 
 SEA_LEVEL_TEMPERATURE = 288.15  # K
@@ -507,6 +507,38 @@ class Turbofan:
             float: Consumo de combustível (kg/s).
         """
         return self.fuel_to_air_ratio * self.get_hot_air_flow()
+
+    def get_emissions_flow(self) -> dict:
+        """
+        Calcula as vazões mássicas de emissões de CO2 e H2O.
+
+        A lógica se baseia na decomposição da vazão total de combustível em
+        vazões de querosene e hidrogênio, aplicando os fatores estequiométricos
+        de conversão para cada produto da combustão.
+
+        Retorna:
+            dict: Um dicionário contendo as vazões de emissões [kg/s].
+                  Ex: {'co2_flow_kgs': 0.5, 'h2o_flow_kgs': 0.2}
+        """
+        total_fuel_flow = self.get_fuel_consumption()  # kg/s
+        chi = self.hydrogen_fraction  # Fração mássica de H2
+
+        # Decompõe a vazão total de combustível
+        kerosene_flow = total_fuel_flow * (1 - chi)
+        hydrogen_flow = total_fuel_flow * chi
+
+        # Calcula a vazão de CO2 (gerado apenas pelo querosene)
+        co2_flow = kerosene_flow * CO2_PER_KEROSENE_MASS
+
+        # Calcula a vazão de H2O (gerado por ambos os combustíveis)
+        h2o_from_kerosene = kerosene_flow * H2O_PER_KEROSENE_MASS
+        h2o_from_hydrogen = hydrogen_flow * H2O_PER_HYDROGEN_MASS
+        total_h2o_flow = h2o_from_kerosene + h2o_from_hydrogen
+
+        return {
+            'co2_flow_kgs': co2_flow,
+            'h2o_flow_kgs': total_h2o_flow
+        }
 
     def print_config(self):
         """

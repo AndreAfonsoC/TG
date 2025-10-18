@@ -1,8 +1,27 @@
 import numpy as np
 
+# Conversão de unidades
 ft2m = 0.3048
 kt2ms = 0.514444
 lb2N = 4.44822
+
+# ==============================================================================
+# FATORES DE EMISSÃO (BASEADO EM ESTEQUIOMETRIA)
+# ==============================================================================
+# Todo: conferir esses valores com fontes confiáveis
+# Reação do Querosene (aproximado como C12H23):
+# C12H23 + 17.75 O2 -> 12 CO2 + 11.5 H2O
+# Massa molar C12H23 ≈ 167 g/mol | Massa molar CO2 = 44 g/mol | Massa molar H2O = 18 g/mol
+# Fator CO2 = (12 * 44) / 167 ≈ 3.15
+# Fator H2O = (11.5 * 18) / 167 ≈ 1.24
+CO2_PER_KEROSENE_MASS = 3.15  # kg de CO2 por kg de querosene queimado
+H2O_PER_KEROSENE_MASS = 1.24  # kg de H2O por kg de querosene queimado
+
+# Reação do Hidrogênio:
+# 2 H2 + O2 -> 2 H2O
+# Massa molar H2 ≈ 2 g/mol | Massa molar H2O = 18 g/mol
+# Fator H2O = (2 * 18) / (2 * 2) ≈ 8.94
+H2O_PER_HYDROGEN_MASS = 8.94   # kg de H2O por kg de hidrogênio queimado
 
 #==============================================
 
