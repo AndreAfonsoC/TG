@@ -75,3 +75,33 @@ class CombustionChamber:
         return (temp_ratio - 1) / (term / cp_t03 - temp_ratio)
 
     # Todo: criar uma função para vermos o quanto de energia vem de cada combustível
+    def get_energy_contribution(self):
+        """
+        Calcula a contribuição de energia de cada combustível (hidrogênio e querosene)
+        com base na fração de massa de hidrogênio (chi).
+
+        Returns:
+            dict: Um dicionário contendo a energia por kg de combustível e a contribuição
+                  percentual de cada componente.
+        """
+        # Energia liberada por cada combustível, por kg da mistura de combustível
+        energy_from_hydrogen = self.chi * self.hydrogen_pci
+        energy_from_kerosene = (1 - self.chi) * self.kerosene_pci
+
+        total_energy = energy_from_hydrogen + energy_from_kerosene
+
+        # Evita divisão por zero caso os poderes caloríficos sejam nulos
+        if total_energy == 0.0:
+            hydrogen_percentage = 0.0
+            kerosene_percentage = 0.0
+        else:
+            hydrogen_percentage = (energy_from_hydrogen / total_energy) * 100
+            kerosene_percentage = (energy_from_kerosene / total_energy) * 100
+
+        return {
+            'energia_hidrogenio_kJ_por_kg_combustivel': energy_from_hydrogen,
+            'energia_querosene_kJ_por_kg_combustivel': energy_from_kerosene,
+            'pci_resultante_kJ_por_kg_combustivel': total_energy,
+            'percentual_energia_hidrogenio': hydrogen_percentage,
+            'percentual_energia_querosene': kerosene_percentage,
+        }

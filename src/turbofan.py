@@ -22,6 +22,7 @@ class Turbofan:
     DEFAULT_CONFIG_DICT = {
         "mach": 0.0,
         "altitude": 0.0,  # em ft
+        "delta_isa_temperature": 0.0,
 
         # Eficiências e Gammas
         "eta_inlet": 0.97,
@@ -69,10 +70,12 @@ class Turbofan:
         # --- Dados do ambiente ---
         self.mach = self.final_config["mach"]
         self.altitude = self.final_config["altitude"]
-        t_a_altitude, p_a_altitude, _, _ = atmosphere(self.altitude * ft2m)
+        self.delta_isa_temperature = self.final_config["delta_isa_temperature"]
+        t_a_altitude, p_a_altitude, _, _ = atmosphere(self.altitude * ft2m,
+                                                      Tba=SEA_LEVEL_TEMPERATURE + self.delta_isa_temperature)
         self.t_a = self.final_config.get("t_a", t_a_altitude) or t_a_altitude
         self.p_a = self.final_config.get("p_a",
-                                    p_a_altitude / 1000) or p_a_altitude / 1000  # Divide por 1000 para passar para kPa
+                                         p_a_altitude / 1000) or p_a_altitude / 1000  # Divide por 1000 para passar para kPa
 
         # --- Eficiências e Gammas ---
         self.eta_inlet = self.final_config["eta_inlet"]
@@ -207,7 +210,8 @@ class Turbofan:
             self.eta_fan = self._design_point['eta_fan'] * models['eta_f_from_N1'](N1_ratio)
             self.eta_compressor = self._design_point['eta_compressor'] * models['eta_c_from_N2'](N2_ratio)
             self.eta_turbina_fan = self._design_point['eta_turbina_fan'] * models['eta_tf_from_N1'](N1_ratio)
-            self.eta_turbina_compressor = self._design_point['eta_turbina_compressor'] * models['eta_t_from_N2'](N2_ratio)
+            self.eta_turbina_compressor = self._design_point['eta_turbina_compressor'] * models['eta_t_from_N2'](
+                N2_ratio)
             self.eta_camara = self._design_point['eta_camara'] * models['eta_b_from_N2'](N2_ratio)
 
             # Vazão mássica (nesse caso hot_air_flow é igual a air_flow)
@@ -279,6 +283,13 @@ class Turbofan:
         self.t04 = t04
         self.update_turbofan_components()
 
+    def set_delta_temperature(self, delta_temperature: float):
+        """
+        Define a variação de temperatura da atmosfera ISA e atualiza as condições do motor.
+        Args:
+            delta_temperature (float): Variação de temperatura em Kelvin.
+        """
+        self.update_final_config({"delta_temperature": delta_temperature})
 
     def update_turbofan_components(self):
         """
@@ -378,14 +389,12 @@ class Turbofan:
         # 9. Velocidade de voo
         self.u_flight = self.get_flight_speed()
 
-
     # Velocidade de Voo
     def get_flight_speed(self):
         """
         Calcula a velocidade de voo baseada no Mach e nas propriedades do ar.
         """
         return self.mach * np.sqrt(self.gamma_inlet * self.mean_R_air * self.t_a)
-
 
     # Empuxo Específico
     def get_specific_thrust(self):
@@ -402,7 +411,6 @@ class Turbofan:
         term2 = self.bpr * (self.u_fan - self.u_flight)
         return (term1 + term2) / 1000
 
-
     # Consumo Específico (TSFC)
     def get_tsfc(self):
         """
@@ -414,7 +422,6 @@ class Turbofan:
             float: TSFC em kg/(kN.s)
         """
         return self.fuel_to_air_ratio / self.get_specific_thrust()
-
 
     # Vazão de ar
     def set_sea_level_air_flow(self, sea_level_air_flow: float):
@@ -429,7 +436,6 @@ class Turbofan:
         correction_factor = (SEA_LEVEL_TEMPERATURE / SEA_LEVEL_PRESSURE) * (self.p_a / self.t_a)
         self.air_flow = sea_level_air_flow * correction_factor
         self.update_turbofan_components()
-
 
     def get_sea_level_air_flow(self):
         """
@@ -446,7 +452,6 @@ class Turbofan:
         else:
             return self.sea_level_air_flow
 
-
     def set_air_flow(self, air_flow: float):
         """
         Define a vazão de ar corrigida para as condições atuais e atualiza a vazão ao nível do mar.
@@ -458,7 +463,6 @@ class Turbofan:
         correction_factor = (SEA_LEVEL_TEMPERATURE / SEA_LEVEL_PRESSURE) * (self.p_a / self.t_a)
         self.sea_level_air_flow = air_flow / correction_factor
         self.update_turbofan_components()
-
 
     def get_air_flow(self):
         """
@@ -475,7 +479,6 @@ class Turbofan:
         else:
             return self.air_flow
 
-
     def get_hot_air_flow(self):
         """
         Retorna a vazão de ar quente (núcleo do motor).
@@ -484,7 +487,6 @@ class Turbofan:
             float: Vazão de ar quente (kg/s).
         """
         return self.get_air_flow() / (self.bpr + 1)
-
 
     # Empuxo
     def get_thrust(self):
@@ -496,7 +498,6 @@ class Turbofan:
         """
         return self.get_specific_thrust() * self.get_hot_air_flow()
 
-
     # Consumo de combustível
     def get_fuel_consumption(self):
         """
@@ -506,7 +507,6 @@ class Turbofan:
             float: Consumo de combustível (kg/s).
         """
         return self.fuel_to_air_ratio * self.get_hot_air_flow()
-
 
     def print_config(self):
         """
@@ -536,7 +536,6 @@ class Turbofan:
                 else:
                     print(f"{key:<{max_key_len}}: {value}")
         print("\n" + "-" * (max_key_len + 10))
-
 
     # Print dos Outputs
     def print_outputs(self):
@@ -581,7 +580,6 @@ class Turbofan:
             print(f"{'Consumo de Combustível':<32}: {self.get_fuel_consumption():.3f} kg/s")
 
         print("\n" + "-" * 61)
-
 
     # Calibração do Turbofan
     def calibrate_turbofan(
@@ -669,7 +667,6 @@ class Turbofan:
             "final_tsfc": round(self.get_tsfc(), 5),
         }
 
-
     def plot_calibration_result(self, target_tsfc: float, t04_range: ndarray = np.arange(1200, 2000, 10)):
         original_t04 = self.t04
 
@@ -705,7 +702,7 @@ class Turbofan:
             altitude: float = None,
             t_a: float = None,
             p_a: float = None,
-            delta_temp: float = 0.0,
+            delta_temperature: float = None,
             percentage_of_rated_thrust: float = 1.0,
     ):
         """
@@ -716,6 +713,7 @@ class Turbofan:
             altitude (float): Altitude em pés.
             t_a (float, optional): Temperatura ambiente em K. Se None, calcula a partir da altitude.
             p_a (float, optional): Pressão ambiente em kPa. Se None, calcula a partir da altitude.
+            delta_temperature (float, optional): Variação de temperatura em relação à ISA.
             percentage_of_rated_thrust (float, optional): Percentual do empuxo de projeto a ser atingido.
                                                          Se fornecido, otimiza N2 para encontrar o empuxo alvo.
         """
@@ -727,8 +725,14 @@ class Turbofan:
             self.mach = mach
         if altitude is not None:
             self.altitude = altitude
-            self.t_a, self.p_a, _, _ = atmosphere(self.altitude * ft2m, SEA_LEVEL_TEMPERATURE + delta_temp)
+        if delta_temperature is not None:
+            self.delta_temperature = delta_temperature
+
+        if altitude is not None or delta_temperature is not None:
+            self.t_a, self.p_a, _, _ = atmosphere(self.altitude * ft2m,
+                                                  Tba=SEA_LEVEL_TEMPERATURE + self.delta_temperature)
             self.p_a = self.p_a / 1000  # Divide por 1000 para passar para kPa
+
         if t_a:
             self.t_a = t_a
         if p_a:
@@ -772,6 +776,7 @@ class Turbofan:
 
 if __name__ == "__main__":
     from utils.configs import config_turbofan
+
     turbofan = Turbofan(config_turbofan)
     turbofan.set_air_flow(100)
     rated_thrust = 121.4  # kN
