@@ -20,14 +20,14 @@ SEA_LEVEL_GRAVITY = 9.80665  # m/s²
 # Massa molar C12H23 ≈ 167 g/mol | Massa molar CO2 = 44 g/mol | Massa molar H2O = 18 g/mol
 # Fator CO2 = (12 * 44) / 167 ≈ 3.15
 # Fator H2O = (11.5 * 18) / 167 ≈ 1.24
-CO2_PER_KEROSENE_MASS = 3.15  # kg de CO2 por kg de querosene queimado
-H2O_PER_KEROSENE_MASS = 1.24  # kg de H2O por kg de querosene queimado
+CO2_PER_KEROSENE_MASS = 3.15  # kg de CO2 por kg de querosene queimado; fonte: https://ansperformance.eu/economics/cba/standard-inputs/latest/chapters/amount_of_emissions_released_by_fuel_burn.html
+H2O_PER_KEROSENE_MASS = 1.237  # kg de H2O por kg de querosene queimado; fonte: https://ansperformance.eu/economics/cba/standard-inputs/latest/chapters/amount_of_emissions_released_by_fuel_burn.html
 
 # Reação do Hidrogênio:
 # 2 H2 + O2 -> 2 H2O
 # Massa molar H2 ≈ 2 g/mol | Massa molar H2O = 18 g/mol
 # Fator H2O = (2 * 18) / (2 * 2) ≈ 8.94
-H2O_PER_HYDROGEN_MASS = 8.94   # kg de H2O por kg de hidrogênio queimado
+H2O_PER_HYDROGEN_MASS = 8.94   # kg de H2O por kg de hidrogênio queimado; fonte: Turns, S. R. (2012). An Introduction to Combustion: Concepts and Applications (3rd ed.). McGraw-Hill.
 
 #==============================================
 
