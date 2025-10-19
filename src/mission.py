@@ -213,7 +213,7 @@ class MissionManager:
         except ValueError as e:
             # Se um ValueError ocorrer (falta de combustível), sinalizamos a falha
             # retornando um consumo total infinito.
-            # print(f"  -> Falha na simulação: {e}") # Descomente para depuração
+            # print(f"  -> Falha na simulação: {e}") # Todo: Descomente para depuração
             return {"total_fuel_consumed_kg": float('inf')}
 
         return {

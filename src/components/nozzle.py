@@ -55,8 +55,8 @@ class Nozzle:
         if self.p0_in == 0:
             raise ValueError("A pressão total de entrada (p0_in) não pode ser zero.")
         if self.p_a > self.p0_in:
-            print(f"WARNING: A pressão ambiente ({self.p_a:.2f}) é maior que a pressão total de entrada do bocal "
-                  f"({self.p0_in:.2f}), por isso retornou-se velocidade nula no bocal!!!")
+            # print(f"WARNING: A pressão ambiente ({self.p_a:.2f}) é maior que a pressão total de entrada do bocal "
+            #       f"({self.p0_in:.2f}), por isso retornou-se velocidade nula no bocal!!!")
             return 0.0
 
         # --- Cálculo por partes para clareza ---

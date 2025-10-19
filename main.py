@@ -110,9 +110,6 @@ print("\n" + "=" * 80)
 print("ANÁLISE FINAL: Resultados consolidados da missão")
 print("=" * 80)
 
-print("\n" + "=" * 80)
-print("ANÁLISE FINAL: Resultados consolidados da missão")
-print("=" * 80)
 
 if missao.results:
     # --- CÓDIGO REFORMULADO ---
@@ -125,7 +122,6 @@ if missao.results:
     print(f"  - Hidrogênio Inicial: {fs_final_obj.hydrogen_mass_initial:.2f} kg")
     print(f"  - Querosene Inicial: {fs_final_obj.kerosene_mass_initial:.2f} kg")
 
-    # Agora podemos chamar o método get_tank_weight() diretamente no objeto
     tanque_peso = fs_final_obj.get_tank_weight()
     print(f"Peso do Tanque de H2 ({fs_final_obj.tank_type}): {tanque_peso:.2f} kg")
 
