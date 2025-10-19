@@ -9,6 +9,7 @@ min2s = 60.0
 # Condições ao nível do mar padrão
 SEA_LEVEL_TEMPERATURE = 288.15  # K
 SEA_LEVEL_PRESSURE = 101.30  # kPa
+SEA_LEVEL_GRAVITY = 9.80665  # m/s²
 
 # ==============================================================================
 # FATORES DE EMISSÃO (BASEADO EM ESTEQUIOMETRIA)
@@ -45,7 +46,7 @@ def atmosphere(z, Tba=288.15):
     # Earth radius
     r = 6356766
     # gravity
-    g0 = 9.80665
+    g0 = SEA_LEVEL_GRAVITY
     # air gas constant
     R = 287.05287
     # layer boundaries
