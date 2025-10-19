@@ -1,5 +1,8 @@
 import math
+import logging
 
+# Obtém um logger para este módulo. As mensagens serão capturadas pela configuração de log principal.
+logger = logging.getLogger(__name__)
 
 class Nozzle:
     """
@@ -55,8 +58,10 @@ class Nozzle:
         if self.p0_in == 0:
             raise ValueError("A pressão total de entrada (p0_in) não pode ser zero.")
         if self.p_a > self.p0_in:
-            # print(f"WARNING: A pressão ambiente ({self.p_a:.2f}) é maior que a pressão total de entrada do bocal "
-            #       f"({self.p0_in:.2f}), por isso retornou-se velocidade nula no bocal!!!")
+            # logger.warning(
+            #     f"Bocal: Pressão ambiente ({self.p_a:.2f} kPa) >= pressão de entrada ({self.p0_in:.2f} kPa). "
+            #     f"Velocidade de exaustão será nula."
+            # )     Todo: Descomentar se quiser logar este aviso.
             return 0.0
 
         # --- Cálculo por partes para clareza ---
