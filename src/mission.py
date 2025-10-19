@@ -181,9 +181,17 @@ class MissionManager:
             return
 
         logger.info("Executando simulação final com os valores ótimos...")
-        final_results = self._run_single_simulation(
-            optimal_fuel_mass, chi_initial_mission, tank_type
-        )
+        try:
+            final_results = self._run_single_simulation(
+                optimal_fuel_mass, chi_initial_mission, tank_type
+            )
+            # Verifica se o empuxo necessário foi atingido em cada fase
+            for phase_detail in final_results.get("phase_details", []):
+                if abs(phase_detail.get("Thrust Obtained (kN)", 0) - phase_detail.get("Thrust Required (kN)", float("inf"))) > 0.01:
+                    raise ValueError(f"Empuxo necessário não atingido na fase {phase_detail['Fase']}")
+        except ValueError as e:
+            logger.error(f"Falha na simulação final: {str(e)}")
+            return
 
         self.results = {
             "Combustível Inicial (kg)": optimal_fuel_mass,
@@ -228,7 +236,7 @@ class MissionManager:
     ) -> dict:
         """
         Executa uma única simulação completa da missão com uma massa de combustível inicial fornecida.
-        Este método é robusto e não lança exceção em caso de falta de combustível; em vez disso,
+        Este méhtodo é robusto e não lança exceção em caso de falta de combustível; em vez disso,
         retorna um valor de consumo infinito para sinalizar a falha ao otimizador.
         """
         fuel_system = FuelSystem(initial_fuel_mass, chi_initial_mission, tank_type)
@@ -248,11 +256,10 @@ class MissionManager:
                     engine_chi = chi_initial_mission
 
                 self.engine.update_final_config({"hydrogen_fraction": engine_chi})
-
                 self.engine.update_environment(
                     mach=phase["mach"],
                     altitude=phase["altitude_ft"],
-                    percentage_of_rated_thrust=phase["thrust_percentage"] * 100,
+                    percentage_of_rated_thrust=phase["thrust_percentage"],
                 )
 
                 duration_sec = phase["duration_min"] * 60
@@ -265,10 +272,15 @@ class MissionManager:
 
                 fuel_system.consume_fuel(fuel_consumed_phase, phase["burn_strategy"])
 
+                thrust_required = self.engine._design_point["rated_thrust"] * phase["thrust_percentage"]
+                thrust_obtained = self.engine.get_thrust()
+
                 phase_details.append(
                     {
                         "Fase": phase["name"],
                         "Duração (min)": phase["duration_min"],
+                        "Thrust Required (kN)": thrust_required,
+                        "Thrust Obtained (kN)": thrust_obtained,
                         "Combustível Consumido (kg)": fuel_consumed_phase,
                         "Emissão de CO2 (kg)": co2_emitted_phase,
                         "Emissão de H2O (kg)": h2o_emitted_phase,

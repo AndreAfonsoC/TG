@@ -70,90 +70,18 @@ missao = MissionManager(engine=meu_motor, zero_fuel_weight=zero_fuel_weight_kg)
 
 # Dados da missão baseados na Tabela 2.1 (GRU -> FOR)
 perfil_de_voo = [
-    {
-        "name": "Taxi (Saída)",
-        "duration_min": 1,
-        "altitude_ft": 0,
-        "mach": 0.0,
-        "thrust_percentage": 100,
-    },
-    {
-        "name": "Decolagem",
-        "duration_min": 1,
-        "altitude_ft": 0,
-        "mach": 0.2,
-        "thrust_percentage": 100,
-    },
-    {
-        "name": "Subida 1",
-        "duration_min": 8,
-        "altitude_ft": 5830,
-        "mach": 0.298,
-        "thrust_percentage": 1,
-    },
-    {
-        "name": "Subida 2",
-        "duration_min": 8,
-        "altitude_ft": 17500,
-        "mach": 0.494,
-        "thrust_percentage": 1,
-    },
-    {
-        "name": "Subida 3",
-        "duration_min": 8,
-        "altitude_ft": 29170,
-        "mach": 0.691,
-        "thrust_percentage": 1,
-    },
-    {
-        "name": "Cruzeiro",
-        "duration_min": 10,
-        "altitude_ft": 35000,
-        "mach": 0.789,
-        "thrust_percentage": 1,
-    },
-    {
-        "name": "Loiter",
-        "duration_min": 10,
-        "altitude_ft": 15000,
-        "mach": 0.4,
-        "thrust_percentage": 1,
-    },
-    {
-        "name": "Descida 1",
-        "duration_min": 8,
-        "altitude_ft": 29170,
-        "mach": 0.691,
-        "thrust_percentage": 1,
-    },
-    {
-        "name": "Descida 2",
-        "duration_min": 8,
-        "altitude_ft": 17500,
-        "mach": 0.494,
-        "thrust_percentage": 1,
-    },
-    {
-        "name": "Descida 3",
-        "duration_min": 8,
-        "altitude_ft": 5830,
-        "mach": 0.298,
-        "thrust_percentage": 1,
-    },
-    {
-        "name": "Pouso",
-        "duration_min": 1,
-        "altitude_ft": 0,
-        "mach": 0.2,
-        "thrust_percentage": 1,
-    },
-    {
-        "name": "Taxi (Chegada)",
-        "duration_min": 5,
-        "altitude_ft": 0,
-        "mach": 0.0,
-        "thrust_percentage": 7,
-    },
+    {'name': 'Taxi (Saída)',   'duration_min': 1,  'altitude_ft': 0,    'mach': 0.0, 'thrust_percentage': 100},
+    {'name': 'Decolagem',      'duration_min': 1,  'altitude_ft': 0,    'mach': 0.2, 'thrust_percentage': 85},
+    {'name': 'Subida 1',       'duration_min': 8,  'altitude_ft': 5830, 'mach': 0.298,'thrust_percentage': 20},
+    {'name': 'Subida 2',       'duration_min': 8,  'altitude_ft': 17500,'mach': 0.494,'thrust_percentage': 15},
+    {'name': 'Subida 3',       'duration_min': 8,  'altitude_ft': 29170,'mach': 0.691,'thrust_percentage': 7},
+    {'name': 'Cruzeiro',       'duration_min': 10,'altitude_ft': 35000,'mach': 0.789,'thrust_percentage': 18},
+    {'name': 'Loiter',         'duration_min': 10, 'altitude_ft': 15000,'mach': 0.4,  'thrust_percentage': 1},
+    {'name': 'Descida 1',      'duration_min': 8,  'altitude_ft': 29170,'mach': 0.691,'thrust_percentage': 1},
+    {'name': 'Descida 2',      'duration_min': 8,  'altitude_ft': 17500,'mach': 0.494,'thrust_percentage': 1},
+    {'name': 'Descida 3',      'duration_min': 8,  'altitude_ft': 5830, 'mach': 0.298,'thrust_percentage': 1},
+    {'name': 'Pouso',          'duration_min': 1,  'altitude_ft': 0,    'mach': 0.2, 'thrust_percentage': 1},
+    {'name': 'Taxi (Chegada)', 'duration_min': 5,  'altitude_ft': 0,    'mach': 0.0, 'thrust_percentage': 7},
 ]
 
 # Adiciona cada fase ao gerenciador da missão
@@ -183,7 +111,7 @@ tipo_de_tanque = "TYPE_IV"
 missao.solve_mission_fuel(
     chi_initial_mission=fracao_h2_missao,
     tank_type=tipo_de_tanque,
-    fuel_guess_bounds=(76, 50e3),  # Intervalo de busca para a massa de combustível
+    fuel_guess_bounds=(1, 5000),  # Intervalo de busca para a massa de combustível
 )
 
 print("\n" + "=" * 80)

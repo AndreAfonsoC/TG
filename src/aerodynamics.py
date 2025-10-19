@@ -2,20 +2,27 @@ from typing import Literal, Optional
 
 import numpy as np
 
-from utils.aux_tools import atmosphere, ft2m, min2s
+from utils.aux_tools import (
+    atmosphere,
+    ft2m,
+    min2s,
+    SEA_LEVEL_TEMPERATURE,
+)
 
 
 class Aerodynamics:
     """
     Modela a aerodinâmica de uma aeronave para calcular o arrasto e o empuxo requerido.
 
-    Esta classe utiliza uma polar de arrasto parabólica para determinar o empuxo necessário
-    em diferentes fases do voo, considerando efeitos de configuração, compressibilidade
-    e taxa de subida. É genérica e pode ser configurada para diferentes tipos de aeronaves,
-    como jatos comerciais ou turbo-hélices.
+    Esta classe utiliza uma polar de arrasto parabólica, uma abordagem padrão em análise de
+    desempenho de aeronaves, para determinar o empuxo necessário em diferentes fases do voo.
 
-    A polar de arrasto é definida por:
-    $$ C_D = C_{D0} + k \cdot C_L^2 $$
+    Referências Principais:
+    - Anderson, J. D. (2016). "Introduction to Flight".
+    - Raymer, D. P. (2018). "Aircraft Design: A Conceptual Approach".
+
+    A polar de arrasto é definida por (Anderson, "Introduction to Flight", Cap. 6):
+    $$ C_D = C_{D0} + C_{Di} = C_{D0} + k \cdot C_L^2 $$
     Onde o fator de arrasto induzido 'k' é:
     $$ k = \frac{1}{\pi \cdot AR \cdot e} $$
     """
@@ -35,10 +42,12 @@ class Aerodynamics:
         Args:
             S_m2 (float): Área de referência da asa [m²].
             AR (float): Razão de aspecto da asa (adimensional).
-            aircraft_type (str, opcional): Tipo de aeronave para estimar parâmetros.
-            cd0 (float, opcional): Coeficiente de arrasto parasita base. Se não fornecido, será estimado.
+            aircraft_type (str, opcional): Tipo de aeronave para estimar parâmetros ('jet_airliner', 'turboprop').
+            cd0 (float, opcional): Coeficiente de arrasto parasita base (configuração limpa, baixo Mach).
+                                   Se não fornecido, será estimado com base no tipo de aeronave.
             e (float, opcional): Fator de eficiência de Oswald. Se não fornecido, será estimado.
-            sweep_angle_deg (float, opcional): Ângulo de enflechamento da asa [graus]. Usado para estimar 'e'.
+            sweep_angle_deg (float, opcional): Ângulo de enflechamento da asa a 25% da corda [graus].
+                                               Usado para estimar 'e'.
         """
         self.S_m2 = S_m2
         self.AR = AR
@@ -59,17 +68,23 @@ class Aerodynamics:
 
         # 2. Estimar Fator de Oswald 'e' (se não fornecido)
         if e is None:
-            if self.aircraft_type == 'jet_airliner':
-                self.e = 0.80  # Valor conservador para jatos comerciais modernos
-            elif self.aircraft_type == 'turboprop':
-                self.e = 0.84  # Valor típico para turbo-hélices com asa de baixo enflechamento
+            # A estimativa de 'e' é baseada no princípio de que o enflechamento da asa reduz
+            # a eficiência da envergadura, diminuindo o fator de Oswald.
+            # (Referência: Raymer, "Aircraft Design", Cap. 12, Seção 12.5).
+            # A lógica abaixo é uma simplificação baseada em valores típicos para diferentes classes de enflechamento.
+            if self.sweep_angle_deg >= 30:
+                self.e = 0.80  # Típico para jatos comerciais com enflechamento moderado/alto
+            elif self.sweep_angle_deg >= 10:
+                self.e = 0.82  # Intermediário
             else:
-                self.e = 0.82  # Padrão genérico
+                self.e = 0.85  # Típico para asas retas ou com baixo enflechamento (turbo-hélices)
         else:
             self.e = e
 
         # 3. Estimar Coeficiente de Arrasto Parasita 'cd0' (se não fornecido)
         if cd0 is None:
+            # Valores de CD0 são empíricos e baseados em dados de aeronaves similares.
+            # (Referência: Raymer, "Aircraft Design", Tabela 12.2 - "Component Drag Buildup").
             if self.aircraft_type == 'jet_airliner':
                 self.cd0_base = 0.022  # Típico para um B737-800 em configuração limpa
             elif self.aircraft_type == 'turboprop':
@@ -79,6 +94,7 @@ class Aerodynamics:
         else:
             self.cd0_base = cd0
 
+        # Fator de arrasto induzido (k) é constante para uma dada geometria
         self.k = 1 / (np.pi * self.AR * self.e)
 
     def get_required_thrust_kN(
@@ -95,13 +111,15 @@ class Aerodynamics:
             num_engines: int = 2
     ) -> float:
         """
-        Calcula o empuxo total requerido pela aeronave (soma de todos os motores) para uma condição de voo.
+        Calcula o empuxo total requerido pela aeronave para uma condição de voo.
 
-        Este méthodo opera em dois modos:
-        1. MODO DE CÁLCULO (padrão): Se `percentage_of_rated_thrust` for None, calcula o empuxo
-           necessário para superar o arrasto e a componente do peso.
-        2. MODO DE OVERRIDE: Se `percentage_of_rated_thrust` for fornecido, ignora todos os
-           cálculos aerodinâmicos e retorna o empuxo total correspondente a essa porcentagem.
+        Opera em dois modos:
+        1. MODO DE CÁLCULO (padrão): Calcula o empuxo necessário com base nas equações de movimento.
+           - Voo nivelado (ROC=0): T = D
+           - Voo em subida (ROC > 0): T = D + W * sin(gamma)
+           (Referência: Anderson, "Introduction to Flight", Cap. 6, Seção 6.4).
+        2. MODO DE OVERRIDE: Se `percentage_of_rated_thrust` for fornecido, ignora os cálculos
+           aerodinâmicos e retorna o empuxo correspondente.
 
         Args:
             weight_N (float): Peso total da aeronave na condição de voo [Newtons].
@@ -122,23 +140,35 @@ class Aerodynamics:
             if rated_thrust_kN_per_engine is None:
                 raise ValueError(
                     "`rated_thrust_kN_per_engine` deve ser fornecido ao usar `percentage_of_rated_thrust`.")
-
             total_rated_thrust = rated_thrust_kN_per_engine * num_engines
             return total_rated_thrust * (percentage_of_rated_thrust / 100.0)
 
-        # --- MODO DE CÁLCULO AERODINÂMICO (lógica original) ---
-        temp_K, press_Pa, rho_kg_m3, sound_speed_ms = atmosphere(altitude_ft * ft2m,
-                                                                 Tba=delta_isa_temperature_K)
+        # --- MODO DE CÁLCULO AERODINÂMICO ---
+        temp_K, _, rho_kg_m3, _ = atmosphere(
+            altitude_ft * ft2m,
+            Tba=SEA_LEVEL_TEMPERATURE + delta_isa_temperature_K
+        )
+        sound_speed_ms = np.sqrt(1.4 * 287.05 * temp_K)
         velocity_ms = mach * sound_speed_ms
         q_Pa = 0.5 * rho_kg_m3 * velocity_ms ** 2
 
+        # $$ C_L = \frac{W}{q \cdot S} $$
+        # (Referência: Anderson, "Introduction to Flight", Cap. 5, Seção 5.3).
         cl = weight_N / (q_Pa * self.S_m2)
 
+        # Correção de compressibilidade de Prandtl-Glauert para o arrasto de onda em regime subsônico.
+        # $$ C_{D0,comp} = \frac{C_{D0}}{\sqrt{1 - M^2}} $$
+        # Nota: Esta é uma simplificação que corrige principalmente o arrasto de pressão. O arrasto de
+        # atrito também varia com o Mach de forma não linear, mas para estudos conceituais, esta correção é
+        # uma aproximação aceita. (Referência: Anderson, "Fundamentals of Aerodynamics", Cap. 11).
         if mach < 0.95:
             cd0_comp = self.cd0_base / np.sqrt(1 - mach ** 2)
         else:
             cd0_comp = self.cd0_base
 
+        # Incremento de arrasto para configuração de high-lift (flaps/trem de pouso).
+        # Valores de incremento baseados em dados empíricos.
+        # (Referência: Raymer, "Aircraft Design", Tabela 12.4 - "Drag increments for flaps and landing gear").
         delta_cd0 = 0.0
         if configuration == 'takeoff':
             delta_cd0 = 0.020
@@ -149,6 +179,8 @@ class Aerodynamics:
         cd_total = cd0_total + self.k * cl ** 2
         drag_N = cd_total * q_Pa * self.S_m2
 
+        # Componente do peso devido à taxa de subida.
+        # $$ \sin(\gamma) = \frac{ROC}{V} $$
         roc_ms = roc_ft_min * ft2m / min2s
         sin_gamma = roc_ms / velocity_ms if velocity_ms > 0 else 0
         weight_component_N = weight_N * sin_gamma
@@ -160,22 +192,21 @@ class Aerodynamics:
     def convert_thrust_to_percentage(
             self,
             thrust_kN: float,
-            rated_thrust_kN: float
+            rated_thrust_kN_total: float
     ) -> float:
         """
-        Converte um valor de empuxo em kN para uma porcentagem do empuxo nominal.
+        Converte um valor de empuxo total em kN para uma porcentagem do empuxo nominal total.
 
         Args:
-            thrust_kN (float): Empuxo a ser convertido [kN].
-            rated_thrust_kN (float): Empuxo nominal de referência do motor [kN].
+            thrust_kN (float): Empuxo total a ser convertido [kN].
+            rated_thrust_kN_total (float): Empuxo nominal total de referência (soma de todos os motores) [kN].
 
         Returns:
             float: O empuxo como uma porcentagem (0 a 100).
         """
-        if rated_thrust_kN <= 0:
+        if rated_thrust_kN_total <= 0:
             return 0.0
-        # O empuxo de entrada é o TOTAL da aeronave, assim como o nominal de referência.
-        return (thrust_kN / rated_thrust_kN) * 100
+        return (thrust_kN / rated_thrust_kN_total) * 100
 
 
 if __name__ == '__main__':
@@ -187,13 +218,13 @@ if __name__ == '__main__':
     )
 
     # Exemplo do MODO DE CÁLCULO (Cruzeiro)
-    peso_cruzeiro_N = (70000) * 9.81
+    peso_cruzeiro_N = (61500) * 9.81
     empuxo_cruzeiro_kN = b737_aero.get_required_thrust_kN(
         weight_N=peso_cruzeiro_N,
         altitude_ft=35000,
         mach=0.789
     )
-    print(f"B737 - Empuxo Requerido em Cruzeiro (Total): {empuxo_cruzeiro_kN:.2f} kN")
+    # print(f"B737 - Empuxo Requerido em Cruzeiro (Total): {empuxo_cruzeiro_kN:.2f} kN")
     print(f"B737 - Empuxo por Motor (2 motores): {empuxo_cruzeiro_kN / 2:.2f} kN")
 
     # Exemplo do MODO DE OVERRIDE (Decolagem)

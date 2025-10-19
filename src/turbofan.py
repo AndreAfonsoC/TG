@@ -19,7 +19,10 @@ from utils.aux_tools import (
     CO2_PER_KEROSENE_MASS,
     H2O_PER_KEROSENE_MASS,
     H2O_PER_HYDROGEN_MASS,
+    SEA_LEVEL_PRESSURE,
+    SEA_LEVEL_TEMPERATURE,
 )
+from utils.configs import DEFAULT_CONFIG_TURBOFAN
 from utils.corrections import model_corrections
 
 # --- Configuração do Logger ---
@@ -54,46 +57,8 @@ if not logger.handlers:
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
 
-# --- Constantes ---
-SEA_LEVEL_TEMPERATURE = 288.15  # K
-SEA_LEVEL_PRESSURE = 101.30  # kPa
-
 
 class Turbofan:
-    DEFAULT_CONFIG_DICT = {
-        "mach": 0.0,
-        "altitude": 0.0,  # em ft
-        "delta_isa_temperature": 0.0,
-        # Eficiências e Gammas
-        "eta_inlet": 0.97,
-        "gamma_inlet": 1.4,
-        "eta_fan": 0.85,
-        "gamma_fan": 1.4,
-        "eta_compressor": 0.85,
-        "gamma_compressor": 1.37,
-        "eta_camara": 1,
-        "gamma_camara": 1.35,
-        "eta_turbina_compressor": 0.9,
-        "gamma_turbina_compressor": 1.33,
-        "eta_turbina_fan": 0.9,
-        "gamma_turbina_fan": 1.33,
-        "eta_bocal_quente": 0.98,
-        "gamma_bocal_quente": 1.36,
-        "eta_bocal_fan": 0.98,
-        "gamma_bocal_fan": 1.4,
-        # Dados operacionais
-        "bpr": 5.0,
-        "prf": 1.5,
-        "pr_bst": None,
-        "prc": 28.6 / 1.5,
-        "hydrogen_fraction": 0.0,
-        "pressure_loss": 0.0,
-        "kerosene_PCI": 45e3,  # kJ/kg
-        "hydrogen_PCI": 120e3,  # kJ/kg
-        "mean_R_air": 288.3,  # (m^2 / (s^2*K))
-        "Cp": 1.11,  # (kJ / (kg*K))
-        "T04": 1600,  # (K)
-    }
 
     def __init__(self, config_dict):
         """
@@ -103,7 +68,7 @@ class Turbofan:
         dicionário fornecido.
         """
         # Cria a configuração final mesclando os padrões com os fornecidos
-        self.final_config = self.DEFAULT_CONFIG_DICT.copy()
+        self.final_config = DEFAULT_CONFIG_TURBOFAN.copy()
         self.final_config.update(config_dict)
 
         # --- Dados do ambiente ---
@@ -576,39 +541,6 @@ class Turbofan:
         total_h2o_flow = h2o_from_kerosene + h2o_from_hydrogen
         return {"co2_flow_kgs": co2_flow, "h2o_flow_kgs": total_h2o_flow}
 
-    def print_config(self):
-        """
-        Imprime as características de configuração do motor de forma organizada.
-        """
-        print("\n--- Configuração do Motor Turboprop ---")
-        max_key_len = max(len(key) for key in self.final_config.keys())
-
-        # Categorias para melhor organização visual
-        enviroment_cat = ["mach", "altitude", "t_a", "p_a"]
-        eff_cat = [k for k in self.final_config if k.startswith("eta_")]
-        gamma_cat = [k for k in self.final_config if k.startswith("gamma_")]
-        ops_cat = [
-            k
-            for k in self.final_config
-            if k not in eff_cat + gamma_cat + enviroment_cat
-        ]
-        categories = {
-            "Condições de Voo e Ambiente": enviroment_cat,
-            "Eficiências": eff_cat,
-            "Gammas": gamma_cat,
-            "Dados Operacionais": ops_cat,
-        }
-
-        for category, keys in categories.items():
-            print(f"\n[{category}]")
-            for key in keys:
-                value = self.final_config.get(key)
-                if isinstance(value, (int, float)):
-                    print(f"{key:<{max_key_len}}: {value:.3f}")
-                else:
-                    print(f"{key:<{max_key_len}}: {value}")
-        print("\n" + "-" * (max_key_len + 10))
-
     # Print dos Outputs
     def print_outputs(self):
         """
@@ -778,14 +710,14 @@ class Turbofan:
             t_a: float = None,
             p_a: float = None,
             delta_temperature: float = None,
-            percentage_of_rated_thrust: float = 1.0,
+            percentage_of_rated_thrust: float | None = None,
     ):
         """
         Atualiza as condições de voo e encontra a rotação N2 para atingir um percentual do empuxo de projeto.
 
         Args:
             mach (float): Número de Mach.
-            altitude (float): Altitude em pés.
+            altitude (float): Altitude em pés [ft].
             t_a (float, optional): Temperatura ambiente em K. Se None, calcula a partir da altitude.
             p_a (float, optional): Pressão ambiente em kPa. Se None, calcula a partir da altitude.
             delta_temperature (float, optional): Variação de temperatura em relação à ISA.
@@ -819,7 +751,7 @@ class Turbofan:
 
         # 2. Se nenhum percentual de empuxo for fornecido, apenas atualiza os componentes e retorna.
         if percentage_of_rated_thrust is None:
-            self.update_turbofan_components()
+            self.set_sea_level_air_flow(self.sea_level_air_flow)
             return
 
         target_thrust = self._design_point["rated_thrust"] * percentage_of_rated_thrust
@@ -840,12 +772,14 @@ class Turbofan:
         if not result.success:
             raise RuntimeError(f"Otimização de N2 para empuxo falhou: {result.message}")
 
+        if result.fun > 0.01:
+            result = minimize_scalar(objective_function, method="Golden", )
+
         if result.fun > 0.01 or result.x >= 0.99 or result.x <= 0.01:
-            if result.x < 0.99:
-                logger.warning(
-                    f"Otimização de N2 não convergiu suficientemente. Erro final: {result.fun:.4f}"
-                )
-                logger.warning("Revertendo N2 para 100% do valor de projeto.")
+            logger.warning(
+                f"Otimização de N2 não convergiu suficientemente. Erro final: {result.fun:.4f}"
+            )
+            logger.warning("Revertendo N2 para 100% do valor de projeto.")
             self.update_from_N2(1.0)
             return
 

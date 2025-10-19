@@ -4,6 +4,11 @@ import numpy as np
 ft2m = 0.3048
 kt2ms = 0.514444
 lb2N = 4.44822
+min2s = 60.0
+
+# Condições ao nível do mar padrão
+SEA_LEVEL_TEMPERATURE = 288.15  # K
+SEA_LEVEL_PRESSURE = 101.30  # kPa
 
 # ==============================================================================
 # FATORES DE EMISSÃO (BASEADO EM ESTEQUIOMETRIA)

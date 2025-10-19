@@ -260,3 +260,38 @@ config_ex73 = {
     "Cp": 1.11,  # (kJ / (kg*K))
     "T04": 1550,  # (K)
 }
+
+DEFAULT_CONFIG_TURBOFAN = {
+    "mach": 0.0,
+    "altitude": 0.0,  # em ft
+    "delta_isa_temperature": 0.0,
+    # Eficiências e Gammas
+    "eta_inlet": 0.97,
+    "gamma_inlet": 1.4,
+    "eta_fan": 0.85,
+    "gamma_fan": 1.4,
+    "eta_compressor": 0.85,
+    "gamma_compressor": 1.37,
+    "eta_camara": 1,
+    "gamma_camara": 1.35,
+    "eta_turbina_compressor": 0.9,
+    "gamma_turbina_compressor": 1.33,
+    "eta_turbina_fan": 0.9,
+    "gamma_turbina_fan": 1.33,
+    "eta_bocal_quente": 0.98,
+    "gamma_bocal_quente": 1.36,
+    "eta_bocal_fan": 0.98,
+    "gamma_bocal_fan": 1.4,
+    # Dados operacionais
+    "bpr": 5.0,
+    "prf": 1.5,
+    "pr_bst": None,
+    "prc": 28.6 / 1.5,
+    "hydrogen_fraction": 0.0,
+    "pressure_loss": 0.0,
+    "kerosene_PCI": 45e3,  # kJ/kg
+    "hydrogen_PCI": 120e3,  # kJ/kg
+    "mean_R_air": 288.3,  # (m^2 / (s^2*K))
+    "Cp": 1.11,  # (kJ / (kg*K))
+    "T04": 1600,  # (K)
+}
