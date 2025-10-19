@@ -758,11 +758,11 @@ class Turbofan:
         if altitude is not None:
             self.altitude = altitude
         if delta_temperature is not None:
-            self.delta_temperature = delta_temperature
+            self.delta_isa_temperature = delta_temperature
 
         if altitude is not None or delta_temperature is not None:
             self.t_a, self.p_a, _, _ = atmosphere(self.altitude * ft2m,
-                                                  Tba=SEA_LEVEL_TEMPERATURE + self.delta_temperature)
+                                                  Tba=SEA_LEVEL_TEMPERATURE + self.delta_isa_temperature)
             self.p_a = self.p_a / 1000  # Divide por 1000 para passar para kPa
 
         if t_a:
@@ -797,8 +797,9 @@ class Turbofan:
             raise RuntimeError(f"Otimização de N2 para empuxo falhou: {result.message}")
 
         if result.fun > 0.01 or result.x >= 0.99 or result.x <= 0.01:
-            print(f"Aviso: A otimização de N2 não convergiu suficientemente. Erro final: {result.fun:.4f}")
-            print("Voltando N2 para 100% do valor de projeto.")
+            if result.x < 0.99:
+                print(f"Aviso: A otimização de N2 não convergiu suficientemente. Erro final: {result.fun:.4f}")
+                print("Voltando N2 para 100% do valor de projeto.")
             self.update_from_N2(1.0)
             return
 
