@@ -5,9 +5,13 @@ from typing import Literal, List, Dict, Union
 import pandas as pd
 from scipy.optimize import brentq
 
-# Importa as classes de sistema e de motor.
 from src.systems import FuelSystem
 from src.turbofan import Turbofan
+from utils.aux_tools import (
+    calculate_energy_from_fuel,
+    calculate_fuel_consumption_breakdown,
+    min2s
+)
 
 # from src.turboprop import Turboprop # Exemplo para uso futuro
 
@@ -113,8 +117,7 @@ class MissionManager:
             "duration_min": duration_min,
             "altitude_ft": altitude_ft,
             "mach": mach,
-            "thrust_percentage": thrust_percentage
-                                 / 100.0,  # Armazena como uma fração (0.0 a 1.0)
+            "thrust_percentage": thrust_percentage / 100.0,  # Armazena como uma fração (0.0 a 1.0)
             "burn_strategy": burn_strategy,
         }
         self.flight_phases.append(phase_data)
@@ -187,27 +190,39 @@ class MissionManager:
             )
             # Verifica se o empuxo necessário foi atingido em cada fase
             for phase_detail in final_results.get("phase_details", []):
-                if abs(phase_detail.get("Thrust Obtained (kN)", 0) - phase_detail.get("Thrust Required (kN)", float("inf"))) > 0.01:
+                if abs(phase_detail.get("Empuxo Obtido (kN)", 0) - phase_detail.get("Empuxo Requerido (kN)",
+                                                                                    float("inf"))) > 0.01:
                     raise ValueError(f"Empuxo necessário não atingido na fase {phase_detail['Fase']}")
         except ValueError as e:
             logger.error(f"Falha na simulação final: {str(e)}")
             return
+        # --- GERAÇÃO DOS DATAFRAMES E ARQUIVOS CSV ---
+        full_df = pd.DataFrame(final_results['phase_details'])
+
+        # Define as colunas para o relatório resumido
+        summary_cols = [
+            'Fase', 'Duração (min)', 'Empuxo Requerido (kN)', 'Empuxo Obtido (kN)',
+            'Combustível Total (kg)', 'Emissão CO2 (kg)', 'Emissão H2O (kg)',
+            'TSFC (kg/s/kN)', 'N2 (%)'
+        ]
+        summary_df = full_df[summary_cols]
+
+        # Salva os arquivos CSV, aplicando o arredondamento na saída
+        summary_df.to_csv('mission_summary.csv', index=False, float_format='%.3f')
+        full_df.to_csv('mission_detailed.csv', index=False, float_format='%.4f')
+        logger.info("Relatórios 'mission_summary.csv' e 'mission_detailed.csv' foram salvos.")
 
         self.results = {
-            "Combustível Inicial (kg)": optimal_fuel_mass,
-            "Fração de H2 da Missão (%)": chi_initial_mission * 100,
-            "Tipo de Tanque": tank_type,
-            "Combustível Total Consumido (kg)": final_results["total_fuel_consumed_kg"],
-            "Emissão Total de CO2 (kg)": final_results["total_co2_emitted_kg"],
-            "Emissão Total de H2O (kg)": final_results["total_h2o_emitted_kg"],
-            "Detalhes por Fase": pd.DataFrame(final_results["phase_details"]),
-            "final_fuel_system_object": final_results["final_fuel_system_state"],
+            'Combustível Inicial (kg)': optimal_fuel_mass,
+            'Fração de H2 da Missão (%)': chi_initial_mission * 100,
+            'Tipo de Tanque': tank_type,
+            'Combustível Total Consumido (kg)': final_results['total_fuel_consumed_kg'],
+            'Emissão Total de CO2 (kg)': final_results['total_co2_emitted_kg'],
+            'Emissão Total de H2O (kg)': final_results['total_h2o_emitted_kg'],
+            'summary_df': summary_df,
+            'detailed_df': full_df,
+            'final_fuel_system_object': final_results['final_fuel_system_state']
         }
-
-        # Salva os detalhes das fases em um arquivo CSV
-        details_df = self.results["Detalhes por Fase"]
-        details_df.to_csv('mission_phase_details.csv', index=False)
-        logger.info("Detalhes das fases salvos em 'mission_phase_details.csv'")
 
         logger.info("--- Simulação da Missão Concluída ---")
         logger.info(
@@ -218,7 +233,7 @@ class MissionManager:
         )
         logger.info("Resultados detalhados por fase:")
         # Log do DataFrame convertido para string para uma melhor formatação no arquivo de log
-        logger.info(f"\n{self.results['Detalhes por Fase'].round(2).to_string()}")
+        logger.info(f"\n{summary_df.round(3).to_string()}")
 
     def clear_mission(self):
         """
@@ -240,11 +255,8 @@ class MissionManager:
         retorna um valor de consumo infinito para sinalizar a falha ao otimizador.
         """
         fuel_system = FuelSystem(initial_fuel_mass, chi_initial_mission, tank_type)
-
         phase_details = []
-        total_fuel_consumed_kg = 0
-        total_co2_emitted_kg = 0
-        total_h2o_emitted_kg = 0
+        totals = {'fuel': 0.0, 'co2': 0.0, 'h2o': 0.0}
 
         try:
             for phase in self.flight_phases:
@@ -262,40 +274,60 @@ class MissionManager:
                     percentage_of_rated_thrust=phase["thrust_percentage"],
                 )
 
-                duration_sec = phase["duration_min"] * 60
-                fuel_flow_kgs = self.engine.get_fuel_consumption()
-                emissions_flow = self.engine.get_emissions_flow()
-
-                fuel_consumed_phase = fuel_flow_kgs * duration_sec
-                co2_emitted_phase = emissions_flow["co2_flow_kgs"] * duration_sec
-                h2o_emitted_phase = emissions_flow["h2o_flow_kgs"] * duration_sec
-
-                fuel_system.consume_fuel(fuel_consumed_phase, phase["burn_strategy"])
-
                 thrust_required = self.engine._design_point["rated_thrust"] * phase["thrust_percentage"]
                 thrust_obtained = self.engine.get_thrust()
+                duration_sec = phase['duration_min'] * min2s
 
-                phase_details.append(
-                    {
-                        "Fase": phase["name"],
-                        "Duração (min)": phase["duration_min"],
-                        "Thrust Required (kN)": thrust_required,
-                        "Thrust Obtained (kN)": thrust_obtained,
-                        "Combustível Consumido (kg)": fuel_consumed_phase,
-                        "Emissão de CO2 (kg)": co2_emitted_phase,
-                        "Emissão de H2O (kg)": h2o_emitted_phase,
-                        "TSFC (kg/s/kN)": self.engine.get_tsfc(),
-                        "N2 (%)": (
-                            getattr(self.engine, "N2_ratio", None) * 100
-                            if hasattr(self.engine, "N2_ratio")
-                            else None
-                        ),
-                    }
+                # Consumo e emissões na fase
+                fuel_consumed_phase = self.engine.get_fuel_consumption() * duration_sec
+                emissions_flow = self.engine.get_emissions_flow()
+                co2_emitted_phase = emissions_flow['co2_flow_kgs'] * duration_sec
+                h2o_emitted_phase = emissions_flow['h2o_flow_kgs'] * duration_sec
+
+                fuel_system.consume_fuel(fuel_consumed_phase, phase['burn_strategy'])
+
+                # Decomposição de consumo e energia
+                fuel_breakdown = calculate_fuel_consumption_breakdown(fuel_consumed_phase, chi_initial_mission,
+                                                                      phase['burn_strategy'])
+                energy_breakdown = calculate_energy_from_fuel(
+                    fuel_consumed_phase, chi_initial_mission, phase['burn_strategy'],
+                    self.engine.kerosene_PCI, self.engine.hydrogen_PCI
                 )
 
-                total_fuel_consumed_kg += fuel_consumed_phase
-                total_co2_emitted_kg += co2_emitted_phase
-                total_h2o_emitted_kg += h2o_emitted_phase
+                # Coleta de todos os dados para a fase
+                phase_data = {
+                    'Fase': phase['name'],
+                    'Duração (min)': phase['duration_min'],
+                    'Altitude (ft)': phase['altitude_ft'],
+                    'Mach': phase['mach'],
+                    'Estratégia de Queima': phase['burn_strategy'],
+                    'Empuxo Requerido (kN)': thrust_required,
+                    'Empuxo Obtido (kN)': thrust_obtained,
+                    'Erro de Empuxo (%)': (
+                                                      thrust_obtained - thrust_required) / thrust_required * 100 if thrust_required > 0 else 0.0,
+                    'Combustível Total (kg)': fuel_consumed_phase,
+                    'H2 Consumido (kg)': fuel_breakdown['h2_consumed_kg'],
+                    'Querosene Consumido (kg)': fuel_breakdown['qav_consumed_kg'],
+                    'Energia H2 (MJ)': energy_breakdown['energy_h2_kJ'] / 1000,
+                    'Energia Querosene (MJ)': energy_breakdown['energy_qav_kJ'] / 1000,
+                    'Emissão CO2 (kg)': co2_emitted_phase,
+                    'Emissão H2O (kg)': h2o_emitted_phase,
+                    'TSFC (kg/s/kN)': self.engine.get_tsfc(),
+                    'N2 (%)': getattr(self.engine, 'N2_ratio', 1.0) * 100,
+                    'N1 (%)': getattr(self.engine, 'N1_ratio', 1.0) * 100,
+                    'f (razão comb/ar)': self.engine.fuel_to_air_ratio,
+                    'chi (fração H2 no motor)': engine_chi,
+                    'Vazão de Ar (kg/s)': self.engine.get_air_flow(),
+                    'T04 (K)': self.engine.t04,
+                    'BPR': self.engine.bpr if hasattr(self.engine, 'bpr') else None,
+                    'Prf': self.engine.prf if hasattr(self.engine, 'prf') else None,
+                    'Prc': self.engine.prc,
+                }
+                phase_details.append(phase_data)
+
+                totals['fuel'] += fuel_consumed_phase
+                totals['co2'] += co2_emitted_phase
+                totals['h2o'] += h2o_emitted_phase
 
         except ValueError as e:
             # Se um ValueError ocorrer (falta de combustível), sinalizamos a falha
@@ -304,9 +336,9 @@ class MissionManager:
             return {"total_fuel_consumed_kg": float("inf")}
 
         return {
-            "total_fuel_consumed_kg": total_fuel_consumed_kg,
-            "total_co2_emitted_kg": total_co2_emitted_kg,
-            "total_h2o_emitted_kg": total_h2o_emitted_kg,
+            "total_fuel_consumed_kg": totals['fuel'],
+            "total_co2_emitted_kg": totals['co2'],
+            "total_h2o_emitted_kg": totals['h2o'],
             "phase_details": phase_details,
-            "final_fuel_system_state": fuel_system,
+            "final_fuel_system_state": fuel_system
         }

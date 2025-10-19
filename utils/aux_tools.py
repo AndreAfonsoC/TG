@@ -1,3 +1,4 @@
+from typing import Literal
 import numpy as np
 
 # Conversão de unidades
@@ -99,3 +100,75 @@ def atmosphere(z, Tba=288.15):
     mu=mu0*(T0+C)/(T+C)*(T/T0)**(1.5)
 
     return T,p,rho,mu
+
+
+def calculate_energy_from_fuel(
+        consumed_fuel_kg: float,
+        chi: float,
+        burn_strategy: Literal["proportional", "hydrogen_only", "kerosene_only"] = "proportional",
+        kerosene_pci_kJ_kg: float = 45000.0,
+        hydrogen_pci_kJ_kg: float = 120000.0,
+) -> dict:
+    """
+    Calcula a energia liberada por cada tipo de combustível com base na massa consumida.
+
+    Args:
+        consumed_fuel_kg (float): Massa total de combustível consumida.
+        chi (float): Fração mássica de hidrogênio na mistura.
+        burn_strategy (str): Estratégia de queima ('proportional', 'hydrogen_only', 'kerosene_only').
+        kerosene_pci_kJ_kg (float): Poder calorífico inferior do querosene [kJ/kg].
+        hydrogen_pci_kJ_kg (float): Poder calorífico inferior do hidrogênio [kJ/kg].
+
+    Returns:
+        dict: Dicionário com a energia liberada por cada combustível [kJ].
+    """
+    energy_h2_kJ = 0.0
+    energy_qav_kJ = 0.0
+
+    if burn_strategy == 'hydrogen_only':
+        energy_h2_kJ = consumed_fuel_kg * hydrogen_pci_kJ_kg
+    elif burn_strategy == 'kerosene_only':
+        energy_qav_kJ = consumed_fuel_kg * kerosene_pci_kJ_kg
+    elif burn_strategy == 'proportional':
+        h2_consumed = consumed_fuel_kg * chi
+        qav_consumed = consumed_fuel_kg * (1 - chi)
+        energy_h2_kJ = h2_consumed * hydrogen_pci_kJ_kg
+        energy_qav_kJ = qav_consumed * kerosene_pci_kJ_kg
+
+    return {'energy_h2_kJ': energy_h2_kJ, 'energy_qav_kJ': energy_qav_kJ}
+
+
+def calculate_fuel_consumption_breakdown(
+        consumed_fuel_kg: float,
+        chi: float,
+        burn_strategy: str
+) -> dict:
+    """
+    Decompõe a massa total de combustível consumida nas massas de H2 e querosene.
+
+    Args:
+        consumed_fuel_kg (float): Massa total de combustível consumida na fase.
+        chi (float): Fração mássica de hidrogênio na mistura inicial da missão.
+        burn_strategy (str): Estratégia de queima da fase.
+
+    Returns:
+        dict: Dicionário com as massas de cada combustível consumido [kg].
+    """
+    h2_consumed_kg = 0.0
+    qav_consumed_kg = 0.0
+
+    if burn_strategy == 'hydrogen_only':
+        h2_consumed_kg = consumed_fuel_kg
+    elif burn_strategy == 'kerosene_only':
+        qav_consumed_kg = consumed_fuel_kg
+    elif burn_strategy == 'proportional':
+        # Só realiza a decomposição se houver uma mistura real
+        if 0.0 < chi < 1.0:
+            h2_consumed_kg = consumed_fuel_kg * chi
+            qav_consumed_kg = consumed_fuel_kg * (1 - chi)
+        elif chi == 1.0:  # Missão 100% H2
+            h2_consumed_kg = consumed_fuel_kg
+        else:  # Missão 100% QAV
+            qav_consumed_kg = consumed_fuel_kg
+
+    return {'h2_consumed_kg': h2_consumed_kg, 'qav_consumed_kg': qav_consumed_kg}
