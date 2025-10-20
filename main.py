@@ -71,7 +71,7 @@ missao = MissionManager(engine=meu_motor, zero_fuel_weight=zero_fuel_weight_kg)
 # Dados da missão baseados na Tabela 2.1 (GRU -> FOR)
 perfil_de_voo = [
     {'name': 'Taxi (Saída)',   'duration_min': 1,  'altitude_ft': 0,    'mach': 0.0, 'thrust_percentage': 100},
-    {'name': 'Decolagem',      'duration_min': 1,  'altitude_ft': 0,    'mach': 0.2, 'thrust_percentage': 85},
+    {'name': 'Decolagem',      'duration_min': 1,  'altitude_ft': 0,    'mach': 0.2, 'thrust_percentage': 78},
     {'name': 'Subida 1',       'duration_min': 8,  'altitude_ft': 5830, 'mach': 0.298,'thrust_percentage': 20},
     {'name': 'Subida 2',       'duration_min': 8,  'altitude_ft': 17500,'mach': 0.494,'thrust_percentage': 15},
     {'name': 'Subida 3',       'duration_min': 8,  'altitude_ft': 29170,'mach': 0.691,'thrust_percentage': 7},
@@ -80,7 +80,7 @@ perfil_de_voo = [
     {'name': 'Descida 1',      'duration_min': 8,  'altitude_ft': 29170,'mach': 0.691,'thrust_percentage': 1},
     {'name': 'Descida 2',      'duration_min': 8,  'altitude_ft': 17500,'mach': 0.494,'thrust_percentage': 1},
     {'name': 'Descida 3',      'duration_min': 8,  'altitude_ft': 5830, 'mach': 0.298,'thrust_percentage': 1},
-    {'name': 'Pouso',          'duration_min': 1,  'altitude_ft': 0,    'mach': 0.2, 'thrust_percentage': 1},
+    {'name': 'Pouso',          'duration_min': 1,  'altitude_ft': 0,    'mach': 0.2, 'thrust_percentage': 7},
     {'name': 'Taxi (Chegada)', 'duration_min': 5,  'altitude_ft': 0,    'mach': 0.0, 'thrust_percentage': 7},
 ]
 

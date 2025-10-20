@@ -53,10 +53,10 @@ class Nozzle:
             float: A velocidade de saída do bocal [m/s].
         """
         # --- Validações para evitar erros matemáticos ---
-        if self.gamma_n == 1:
-            raise ValueError("A razão de calores específicos (gamma_n) não pode ser 1.")
-        if self.p0_in == 0:
-            raise ValueError("A pressão total de entrada (p0_in) não pode ser zero.")
+        if self.gamma_n <= 1:
+            raise ValueError("A razão de calores específicos (gamma_n) deve ser maior que 1.")
+        if self.p0_in < 0 or self.p_a < 0:
+            raise ValueError("As pressões não podem ser negativas.")
         if self.p_a > self.p0_in:
             # logger.warning(
             #     f"Bocal: Pressão ambiente ({self.p_a:.2f} kPa) >= pressão de entrada ({self.p0_in:.2f} kPa). "

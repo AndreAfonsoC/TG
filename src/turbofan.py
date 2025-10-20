@@ -435,7 +435,7 @@ class Turbofan:
         """
         term1 = (1 + self.fuel_to_air_ratio) * self.u_core - self.u_flight
         term2 = self.bpr * (self.u_fan - self.u_flight)
-        return (term1 + term2) / 1000
+        return max((term1 + term2) / 1000, 0)  # converte para kN/(kg/s) e evita valores negativos
 
     def get_tsfc(self):
         specific_thrust = self.get_specific_thrust()
@@ -785,6 +785,68 @@ class Turbofan:
 
         self.update_from_N2(result.x)
 
+    def get_thrust_envelope(self, mach: float, altitude_ft: float, delta_isa_temperature_K: float = 0.0) -> dict:
+        """
+        Calcula o envelope de empuxo (mínimo e máximo) para uma dada condição de voo.
+
+        - O empuxo máximo é definido pela operação com N2 = 100%.
+        - O empuxo mínimo (flight idle) é definido pela condição onde a pressão de
+          saída do fan se iguala à pressão ambiente (P08 ≈ Pa), indicando que
+          o fan não está mais provendo empuxo líquido significativo.
+
+        Args:
+            mach (float): Número de Mach de voo.
+            altitude_ft (float): Altitude de voo em pés.
+            delta_isa_temperature_K (float): Variação da temperatura em relação à ISA [K].
+
+        Returns:
+            dict: Dicionário contendo o empuxo mínimo e máximo em kN.
+                  Ex: {'min_thrust_kN': 5.0, 'max_thrust_kN': 25.0}
+        """
+        if not hasattr(self, '_design_point'):
+            raise ValueError("O motor deve ser calibrado e ter um ponto de projeto salvo.")
+
+        # --- 1. Cálculo do Empuxo Máximo ---
+        # Atualiza o ambiente para a condição de voo e define N2 para 100%
+        self.update_environment(mach=mach, altitude=altitude_ft, delta_temperature=delta_isa_temperature_K)
+        self.update_from_N2(1.0)
+        max_thrust_kN = self.get_thrust()
+
+        # --- 2. Cálculo do Empuxo Mínimo (Flight Idle) ---
+        def objective_idle(n2_ratio):
+            self.update_from_N2(n2_ratio)
+            return abs(self.get_thrust())
+
+        # Executa a otimização para encontrar o N2 de marcha lenta
+        idle_result = minimize_scalar(
+            objective_idle,
+            bounds=(0.5, 1.0),  # Limites realistas para a operação do N2
+            method='bounded',
+            options={'xatol': 1e-6}
+        )
+
+        if not idle_result.success:
+            logger.warning(
+                f"Otimização para N2 de marcha lenta falhou. Usando o menor valor do intervalo como fallback.")
+            n2_idle = 0.5
+        else:
+            if idle_result.fun > 0.01:
+                logger.info(
+                    f"Otimização para N2 de marcha lenta não convergiu suficientemente. Erro final: {idle_result.fun:.4f}")
+            else:
+                logger.info(f"Otimização para N2 de marcha lenta convergiu com sucesso!")
+            n2_idle = idle_result.x
+
+        # Define o motor para a condição de marcha lenta e obtém o empuxo
+        self.update_from_N2(n2_idle)
+        min_thrust_kN = self.get_thrust()
+
+        return {
+            'min_thrust_kN': min_thrust_kN,
+            'max_thrust_kN': max_thrust_kN,
+            'n2_for_min_thrust': n2_idle
+        }
+
 
 if __name__ == "__main__":
     from utils.configs import config_turbofan
@@ -795,3 +857,5 @@ if __name__ == "__main__":
     fuel_flow = 1.293  # kg/s
     optimization_status = turbofan.calibrate_turbofan(rated_thrust, fuel_flow)
     turbofan.update_environment(mach=0.0, percentage_of_rated_thrust=1)
+    # result = turbofan.get_thrust_envelope(0.789, 35e3)
+    # print(result)
