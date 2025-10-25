@@ -192,6 +192,7 @@ class MissionManager:
             for phase_detail in final_results.get("phase_details", []):
                 if abs(phase_detail.get("Empuxo Obtido (kN)", 0) - phase_detail.get("Empuxo Requerido (kN)",
                                                                                     float("inf"))) > 0.01:
+                    # Todo: Conferir pq não consigo chegar exatamente no empuxo requerido no taxi saída quando uso H2
                     raise ValueError(f"Empuxo necessário não atingido na fase {phase_detail['Fase']}")
         except ValueError as e:
             logger.error(f"Falha na simulação final: {str(e)}")

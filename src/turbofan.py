@@ -435,7 +435,7 @@ class Turbofan:
         """
         term1 = (1 + self.fuel_to_air_ratio) * self.u_core - self.u_flight
         term2 = self.bpr * (self.u_fan - self.u_flight)
-        return max((term1 + term2) / 1000, 0)  # converte para kN/(kg/s) e evita valores negativos
+        return (term1 + term2) / 1000  # converte para kN/(kg/s)
 
     def get_tsfc(self):
         specific_thrust = self.get_specific_thrust()
@@ -856,6 +856,6 @@ if __name__ == "__main__":
     rated_thrust = 121.4  # kN
     fuel_flow = 1.293  # kg/s
     optimization_status = turbofan.calibrate_turbofan(rated_thrust, fuel_flow)
-    turbofan.update_environment(mach=0.0, percentage_of_rated_thrust=1)
-    # result = turbofan.get_thrust_envelope(0.789, 35e3)
-    # print(result)
+    # turbofan.update_environment(mach=0.0, percentage_of_rated_thrust=1)
+    result = turbofan.get_thrust_envelope(0.789, 35e3)
+    print(result)
