@@ -2,11 +2,13 @@ import pandas as pd
 
 from src.mission import MissionManager
 from src.turbofan import Turbofan
+from src.aerodynamics import Aerodynamics
 
 # Configura o pandas para exibir todas as colunas e formatar os números
 pd.set_option("display.max_columns", None)
 pd.set_option("display.width", 1000)
 pd.options.display.float_format = "{:,.4f}".format
+fracao_h2_missao = 0.3  # Exemplo: 30% da massa de combustível é hidrogênio
 
 # --- 1. CONFIGURAÇÃO E CALIBRAÇÃO DO MOTOR ---
 
@@ -19,7 +21,7 @@ print("=" * 80)
 config_calibracao = {
     "mach": 0.0,
     "altitude": 0,  # Nível do mar
-    "hydrogen_fraction": 0.0,  # Calibração feita com 100% querosene
+    "hydrogen_fraction": fracao_h2_missao,  # Calibração feita com 100% querosene
 }
 
 # Cria a instância do motor
@@ -35,8 +37,8 @@ consumo_decolagem_kgs = 1.293  # (consumo de combustível em kg/s)
 resultado_calibracao = meu_motor.calibrate_turbofan(
     rated_thrust_kN=empuxo_de_projeto_kN,
     fuel_flow_kgs=consumo_decolagem_kgs,
-    t04_bounds=(1400, 1800),
-    m_dot_bounds=(300, 600),
+    t04_bounds=(1400, 3000),
+    m_dot_bounds=(10, 1000),
 )
 
 if not resultado_calibracao["success"]:
@@ -94,7 +96,7 @@ for fase in perfil_de_voo:
         altitude_ft=fase["altitude_ft"],
         mach=fase["mach"],
         thrust_percentage=fase["thrust_percentage"],
-        burn_strategy="kerosene_only",  # Altere aqui se desejar (ex: 'hydrogen_only', 'kerosene_only')
+        burn_strategy="proportional",  # Altere aqui se desejar (ex: 'hydrogen_only', 'kerosene_only')
     )
 
 # --- 3. EXECUÇÃO E ANÁLISE DA SIMULAÇÃO ---
@@ -104,7 +106,6 @@ print("FASE DE EXECUÇÃO: Solucionando a missão...")
 print("=" * 80)
 
 # Define a fração de hidrogênio e o tipo de tanque para a missão a ser simulada
-fracao_h2_missao = 0.0  # Exemplo: 30% da massa de combustível é hidrogênio
 tipo_de_tanque = "TYPE_IV"
 
 # Executa a simulação. Este méthodo irá iterar até encontrar o combustível necessário.
