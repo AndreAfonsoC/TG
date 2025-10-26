@@ -8,7 +8,7 @@ from src.aerodynamics import Aerodynamics
 pd.set_option("display.max_columns", None)
 pd.set_option("display.width", 1000)
 pd.options.display.float_format = "{:,.4f}".format
-fracao_h2_missao = 0.3  # Exemplo: 30% da massa de combustível é hidrogênio
+fracao_h2_missao = 0.0 # Exemplo: 30% da massa de combustível é hidrogênio
 
 # --- 1. CONFIGURAÇÃO E CALIBRAÇÃO DO MOTOR ---
 
@@ -21,7 +21,7 @@ print("=" * 80)
 config_calibracao = {
     "mach": 0.0,
     "altitude": 0,  # Nível do mar
-    "hydrogen_fraction": fracao_h2_missao,  # Calibração feita com 100% querosene
+    "hydrogen_fraction": 0.0,  # Calibração feita com 100% querosene
 }
 
 # Cria a instância do motor
@@ -34,10 +34,20 @@ consumo_decolagem_kgs = 1.293  # (consumo de combustível em kg/s)
 
 # Executa a calibração para encontrar T04 e a vazão de ar que correspondem ao desempenho de projeto
 # Este méthodo já chama 'save_design_point()' internamente no final.
+meu_motor.calibrate_turbofan(
+    rated_thrust_kN=empuxo_de_projeto_kN,
+    fuel_flow_kgs=consumo_decolagem_kgs,
+    t04_bounds=(1400, 1800),
+    m_dot_bounds=(10, 1000),
+)
+
+# Agora fixamos T04 e recalculamos a vazão de ar para a fração de hidrogênio desejada na missão
+t04_design = meu_motor._design_point["t04"]
+meu_motor.update_final_config({"hydrogen_fraction": fracao_h2_missao})
 resultado_calibracao = meu_motor.calibrate_turbofan(
     rated_thrust_kN=empuxo_de_projeto_kN,
     fuel_flow_kgs=consumo_decolagem_kgs,
-    t04_bounds=(1400, 3000),
+    t04_bounds=(1400, t04_design),
     m_dot_bounds=(10, 1000),
 )
 
