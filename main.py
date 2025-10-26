@@ -50,7 +50,7 @@ T04_BOUNDS_CALIBRATION = (1400, 1800)
 MDOT_BOUNDS_CALIBRATION = (300, 600)
 
 # --- Missão ---
-MISSION_CHI = 0.0  # Fração inicial de H2
+MISSION_CHI = 0.1  # Fração inicial de H2
 TANK_TYPE = "TYPE_IV"
 MAX_SEGMENT_DURATION_MIN = 15
 FUEL_GUESS_BOUNDS = (10, 20e3)
@@ -63,30 +63,18 @@ def get_base_flight_profile() -> list:
     """Retorna o perfil de voo base com estimativas de empuxo e dados aero."""
     # Contém dados completos, incluindo os necessários para Aerodynamics
     return [
-        {'name': 'Taxi (Saída)', 'duration_min': 1, 'altitude_ft': 0, 'mach': 0.0, 'thrust_percentage': 100,
-         'roc_ft_min': 0, 'configuration': 'clean'},
-        {'name': 'Decolagem', 'duration_min': 1, 'altitude_ft': 0, 'mach': 0.2, 'thrust_percentage': 78,
-         'roc_ft_min': 3000, 'configuration': 'takeoff'},
-        {'name': 'Subida 1', 'duration_min': 8, 'altitude_ft': 5830, 'mach': 0.298, 'thrust_percentage': 20,
-         'roc_ft_min': 2500, 'configuration': 'clean'},
-        {'name': 'Subida 2', 'duration_min': 8, 'altitude_ft': 17500, 'mach': 0.494, 'thrust_percentage': 15,
-         'roc_ft_min': 2000, 'configuration': 'clean'},
-        {'name': 'Subida 3', 'duration_min': 8, 'altitude_ft': 29170, 'mach': 0.691, 'thrust_percentage': 7,
-         'roc_ft_min': 1500, 'configuration': 'clean'},
-        {'name': 'Cruzeiro', 'duration_min': 150, 'altitude_ft': 35000, 'mach': 0.789, 'thrust_percentage': 18,
-         'roc_ft_min': 0, 'configuration': 'clean'},
-        {'name': 'Loiter', 'duration_min': 45, 'altitude_ft': 15000, 'mach': 0.4, 'thrust_percentage': 1,
-         'roc_ft_min': 0, 'configuration': 'clean'},
-        {'name': 'Descida 1', 'duration_min': 8, 'altitude_ft': 29170, 'mach': 0.691, 'thrust_percentage': 1,
-         'roc_ft_min': -1500, 'configuration': 'clean'},
-        {'name': 'Descida 2', 'duration_min': 8, 'altitude_ft': 17500, 'mach': 0.494, 'thrust_percentage': 1,
-         'roc_ft_min': -2000, 'configuration': 'clean'},
-        {'name': 'Descida 3', 'duration_min': 8, 'altitude_ft': 5830, 'mach': 0.298, 'thrust_percentage': 1,
-         'roc_ft_min': -1000, 'configuration': 'landing'},
-        {'name': 'Pouso', 'duration_min': 1, 'altitude_ft': 0, 'mach': 0.2, 'thrust_percentage': 7, 'roc_ft_min': -500,
-         'configuration': 'landing'},
-        {'name': 'Taxi (Chegada)', 'duration_min': 5, 'altitude_ft': 0, 'mach': 0.0, 'thrust_percentage': 7,
-         'roc_ft_min': 0, 'configuration': 'clean'},
+        {'name': 'Taxi (Saída)',   'duration_min': 1,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 100, 'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'kerosene_only'},
+        {'name': 'Decolagem',      'duration_min': 1,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 78,  'roc_ft_min': 3000,  'configuration': 'takeoff', 'burn_strategy': 'kerosene_only'},
+        {'name': 'Subida 1',       'duration_min': 8,   'altitude_ft': 5830,  'mach': 0.298, 'thrust_percentage': 20,  'roc_ft_min': 2500,  'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Subida 2',       'duration_min': 8,   'altitude_ft': 17500, 'mach': 0.494, 'thrust_percentage': 15,  'roc_ft_min': 2000,  'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Subida 3',       'duration_min': 8,   'altitude_ft': 29170, 'mach': 0.691, 'thrust_percentage': 7,   'roc_ft_min': 1500,  'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Cruzeiro',       'duration_min': 150, 'altitude_ft': 35000, 'mach': 0.789, 'thrust_percentage': 18,  'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'hydrogen_only'},
+        {'name': 'Loiter',         'duration_min': 45,  'altitude_ft': 15000, 'mach': 0.400, 'thrust_percentage': 1,   'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'hydrogen_only'},
+        {'name': 'Descida 1',      'duration_min': 8,   'altitude_ft': 29170, 'mach': 0.691, 'thrust_percentage': 1,   'roc_ft_min': -1500, 'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Descida 2',      'duration_min': 8,   'altitude_ft': 17500, 'mach': 0.494, 'thrust_percentage': 1,   'roc_ft_min': -2000, 'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Descida 3',      'duration_min': 8,   'altitude_ft': 5830,  'mach': 0.298, 'thrust_percentage': 1,   'roc_ft_min': -1000, 'configuration': 'landing', 'burn_strategy': 'proportional'},
+        {'name': 'Pouso',          'duration_min': 1,   'altitude_ft': 0,     'mach': 0.200, 'thrust_percentage': 7,   'roc_ft_min': -500,  'configuration': 'landing', 'burn_strategy': 'proportional'},
+        {'name': 'Taxi (Chegada)', 'duration_min': 5,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 7,   'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'proportional'},
     ]
 
 
@@ -216,8 +204,6 @@ if __name__ == "__main__":
 
     # Obtém perfil base e define estratégia de queima
     profile_stage1 = get_base_flight_profile()
-    for phase in profile_stage1:
-        phase['burn_strategy'] = 'kerosene_only' if MISSION_CHI == 0.0 else 'proportional'
 
     # Roda Etapa 1
     results_stage1 = run_simulation_stage(
