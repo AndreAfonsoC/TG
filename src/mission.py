@@ -62,7 +62,12 @@ class MissionManager:
     agregar os resultados finais, como consumo total e emissões.
     """
 
-    def __init__(self, engine: EngineType, zero_fuel_weight: float):
+    def __init__(
+            self,
+            engine: EngineType,
+            num_engines: int,
+            zero_fuel_weight: float
+    ):
         """
         Inicializa o MissionManager.
 
@@ -78,6 +83,7 @@ class MissionManager:
             )
 
         self.engine = engine
+        self.num_engines = num_engines
         self.zero_fuel_weight = zero_fuel_weight
         self.flight_phases: List[Dict] = []
         self.results: Dict = {}
@@ -90,6 +96,8 @@ class MissionManager:
             altitude_ft: float,
             mach: float,
             thrust_percentage: float,
+            roc_ft_min: float = 0.0,
+            configuration: str = "clean",
             burn_strategy: Literal[
                 "proportional", "hydrogen_only", "kerosene_only"
             ] = "proportional",
@@ -118,6 +126,8 @@ class MissionManager:
             "altitude_ft": altitude_ft,
             "mach": mach,
             "thrust_percentage": thrust_percentage / 100.0,  # Armazena como uma fração (0.0 a 1.0)
+            "roc_ft_min": roc_ft_min,
+            "configuration": configuration,
             "burn_strategy": burn_strategy,
         }
         self.flight_phases.append(phase_data)
@@ -244,47 +254,54 @@ class MissionManager:
         logger.info("Perfil da missão foi limpo.")
 
     def _run_single_simulation(
-            self,
-            initial_fuel_mass: float,
-            chi_initial_mission: float,
+            self, initial_fuel_mass: float, chi_initial_mission: float,
             tank_type: Literal["TYPE_I", "TYPE_II", "TYPE_III", "TYPE_IV"],
     ) -> dict:
-        """
-        Executa uma única simulação completa da missão com uma massa de combustível inicial fornecida.
-        Este méhtodo é robusto e não lança exceção em caso de falta de combustível; em vez disso,
-        retorna um valor de consumo infinito para sinalizar a falha ao otimizador.
-        """
+        """Executa uma simulação com combustível inicial estimado."""
         fuel_system = FuelSystem(initial_fuel_mass, chi_initial_mission, tank_type)
         phase_details = []
         totals = {'fuel': 0.0, 'co2': 0.0, 'h2o': 0.0}
 
+        # --- MODIFICAÇÃO: Rastreamento de Peso ---
+        current_weight_kg = self.zero_fuel_weight + fuel_system.get_total_weight_at_takeoff()
+
         try:
             for phase in self.flight_phases:
+                # --- MODIFICAÇÃO: Armazena peso inicial da fase ---
+                initial_phase_weight_kg = current_weight_kg
+
+                # Define fração de H2 e atualiza motor
                 if phase["burn_strategy"] == "hydrogen_only":
                     engine_chi = 1.0
                 elif phase["burn_strategy"] == "kerosene_only":
                     engine_chi = 0.0
                 else:
                     engine_chi = chi_initial_mission
-
                 self.engine.update_final_config({"hydrogen_fraction": engine_chi})
+
+                # Atualiza ambiente e encontra N2 para o empuxo
+                thrust_percentage_required = phase["thrust_percentage"]
+                thrust_required_kN = self.engine._design_point["rated_thrust"] * thrust_percentage_required
                 self.engine.update_environment(
-                    mach=phase["mach"],
-                    altitude=phase["altitude_ft"],
-                    percentage_of_rated_thrust=phase["thrust_percentage"],
+                    mach=phase["mach"], altitude=phase["altitude_ft"],
+                    percentage_of_rated_thrust=thrust_percentage_required,
                 )
 
-                thrust_required = self.engine._design_point["rated_thrust"] * phase["thrust_percentage"]
-                thrust_obtained = self.engine.get_thrust()
+                # Obtém empuxo obtido e calcula consumo/emissões
+                thrust_obtained_kN = self.engine.get_thrust()  # Por motor
                 duration_sec = phase['duration_min'] * min2s
+                fuel_consumed_phase = self.engine.get_fuel_consumption() * duration_sec * self.num_engines  # Total
+                emissions_flow = self.engine.get_emissions_flow()  # Por motor
+                co2_emitted_phase = emissions_flow['co2_flow_kgs'] * duration_sec * self.num_engines  # Total
+                h2o_emitted_phase = emissions_flow['h2o_flow_kgs'] * duration_sec * self.num_engines  # Total
 
-                # Consumo e emissões na fase
-                fuel_consumed_phase = self.engine.get_fuel_consumption() * duration_sec
-                emissions_flow = self.engine.get_emissions_flow()
-                co2_emitted_phase = emissions_flow['co2_flow_kgs'] * duration_sec
-                h2o_emitted_phase = emissions_flow['h2o_flow_kgs'] * duration_sec
-
+                # Consome combustível
                 fuel_system.consume_fuel(fuel_consumed_phase, phase['burn_strategy'])
+
+                # --- MODIFICAÇÃO: Calcula pesos final e médio ---
+                final_phase_weight_kg = initial_phase_weight_kg - fuel_consumed_phase
+                average_phase_weight_kg = (initial_phase_weight_kg + final_phase_weight_kg) / 2.0
+                current_weight_kg = final_phase_weight_kg  # Atualiza para próxima fase
 
                 # Decomposição de consumo e energia
                 fuel_breakdown = calculate_fuel_consumption_breakdown(fuel_consumed_phase, chi_initial_mission,
@@ -294,17 +311,26 @@ class MissionManager:
                     self.engine.kerosene_PCI, self.engine.hydrogen_PCI
                 )
 
-                # Coleta de todos os dados para a fase
+                # Coleta de todos os dados para a fase, incluindo pesos
                 phase_data = {
                     'Fase': phase['name'],
                     'Duração (min)': phase['duration_min'],
                     'Altitude (ft)': phase['altitude_ft'],
                     'Mach': phase['mach'],
                     'Estratégia de Queima': phase['burn_strategy'],
-                    'Empuxo Requerido (kN)': thrust_required,
-                    'Empuxo Obtido (kN)': thrust_obtained,
-                    'Erro de Empuxo (%)': (
-                                                      thrust_obtained - thrust_required) / thrust_required * 100 if thrust_required > 0 else 0.0,
+                    'ROC (ft/min)': phase['roc_ft_min'],
+                    'Configuração': phase['configuration'],
+                    'Zero Fuel Weight (kg)': self.zero_fuel_weight,
+                    'Peso do Tanque de H2 (kg)': fuel_system.get_tank_weight(),
+                    'Peso Inicial (kg)': initial_phase_weight_kg,
+                    'Peso Final (kg)': final_phase_weight_kg,
+                    'Peso Médio (kg)': average_phase_weight_kg,
+                    'Empuxo Requerido (kN)': thrust_required_kN * self.num_engines,  # Total
+                    'Empuxo Obtido (kN)': thrust_obtained_kN * self.num_engines,  # Total
+                    'Erro de Empuxo (%)': ((thrust_obtained_kN * self.num_engines / (
+                                self.engine._design_point["rated_thrust"] * self.num_engines)) - phase[
+                                               "thrust_percentage"]) * 100 if phase["thrust_percentage"] > 0 else 0.0,
+                    # Erro relativo ao % nominal
                     'Combustível Total (kg)': fuel_consumed_phase,
                     'H2 Consumido (kg)': fuel_breakdown['h2_consumed_kg'],
                     'Querosene Consumido (kg)': fuel_breakdown['qav_consumed_kg'],
@@ -312,12 +338,12 @@ class MissionManager:
                     'Energia Querosene (MJ)': energy_breakdown['energy_qav_kJ'] / 1000,
                     'Emissão CO2 (kg)': co2_emitted_phase,
                     'Emissão H2O (kg)': h2o_emitted_phase,
-                    'TSFC (kg/s/kN)': self.engine.get_tsfc(),
+                    'TSFC (kg/s/kN)': self.engine.get_tsfc(),  # Por motor
                     'N2 (%)': getattr(self.engine, 'N2_ratio', 1.0) * 100,
                     'N1 (%)': getattr(self.engine, 'N1_ratio', 1.0) * 100,
                     'f (razão comb/ar)': self.engine.fuel_to_air_ratio,
                     'chi (fração H2 no motor)': engine_chi,
-                    'Vazão de Ar (kg/s)': self.engine.get_air_flow(),
+                    'Vazão de Ar (kg/s)': self.engine.get_air_flow(),  # Por motor
                     'T04 (K)': self.engine.t04,
                     'BPR': self.engine.bpr if hasattr(self.engine, 'bpr') else None,
                     'Prf': self.engine.prf if hasattr(self.engine, 'prf') else None,
@@ -325,14 +351,16 @@ class MissionManager:
                 }
                 phase_details.append(phase_data)
 
+                # Acumula totais
                 totals['fuel'] += fuel_consumed_phase
                 totals['co2'] += co2_emitted_phase
                 totals['h2o'] += h2o_emitted_phase
 
-        except ValueError as e:
-            # Se um ValueError ocorrer (falta de combustível), sinalizamos a falha
-            # retornando um consumo total infinito.
-            # logger.debug(f"  -> Falha na simulação: {e}")     # Todo: Descomente para depuração
+        except ValueError as e:  # Falta de combustível
+            # logger.debug(f" -> Falha (ValueError): {e}") # TODO: Descomentar para depuração
+            return {"total_fuel_consumed_kg": float("inf")}
+        except RuntimeError as e:  # Falha na otimização de N2
+            # logger.debug(f" -> Falha (RuntimeError): {e}") # TODO: Descomentar para depuração
             return {"total_fuel_consumed_kg": float("inf")}
 
         return {

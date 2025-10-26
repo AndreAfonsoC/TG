@@ -1,4 +1,6 @@
-from typing import Literal
+import math
+from typing import Literal, Dict, List
+
 import numpy as np
 
 # Conversão de unidades
@@ -15,7 +17,6 @@ SEA_LEVEL_GRAVITY = 9.80665  # m/s²
 # ==============================================================================
 # FATORES DE EMISSÃO (BASEADO EM ESTEQUIOMETRIA)
 # ==============================================================================
-# Todo: conferir esses valores com fontes confiáveis
 # Reação do Querosene (aproximado como C12H23):
 # C12H23 + 17.75 O2 -> 12 CO2 + 11.5 H2O
 # Massa molar C12H23 ≈ 167 g/mol | Massa molar CO2 = 44 g/mol | Massa molar H2O = 18 g/mol
@@ -28,12 +29,12 @@ H2O_PER_KEROSENE_MASS = 1.237  # kg de H2O por kg de querosene queimado; fonte: 
 # 2 H2 + O2 -> 2 H2O
 # Massa molar H2 ≈ 2 g/mol | Massa molar H2O = 18 g/mol
 # Fator H2O = (2 * 18) / (2 * 2) ≈ 8.94
-H2O_PER_HYDROGEN_MASS = 8.94   # kg de H2O por kg de hidrogênio queimado; fonte: Turns, S. R. (2012). An Introduction to Combustion: Concepts and Applications (3rd ed.). McGraw-Hill.
+H2O_PER_HYDROGEN_MASS = 8.94  # kg de H2O por kg de hidrogênio queimado; fonte: Turns, S. R. (2012). An Introduction to Combustion: Concepts and Applications (3rd ed.). McGraw-Hill.
 
-#==============================================
+
+# ==============================================
 
 def atmosphere(z, Tba=288.15):
-
     '''
     Funçao que retorna a Temperatura, Pressao e Densidade para uma determinada
     altitude z [m]. Essa funçao usa o modelo padrao de atmosfera para a
@@ -59,14 +60,14 @@ def atmosphere(z, Tba=288.15):
     # temperature at the base of each layer
     Tstdb = [288.15, 216.65, 216.65, 228.65, 270.65];
     # temperature correction
-    Tb = Tba-Tstdb[0]
+    Tb = Tba - Tstdb[0]
     # air viscosity
-    mu0 = 18.27e-6 # [Pa s]
-    T0 = 291.15 # [K]
-    C = 120 # [K]
+    mu0 = 18.27e-6  # [Pa s]
+    T0 = 291.15  # [K]
+    C = 120  # [K]
 
     # geopotential altitude
-    H = r*z/(r+z)
+    H = r * z / (r + z)
 
     # selecting layer
     if H < Ht[0]:
@@ -85,21 +86,21 @@ def atmosphere(z, Tba=288.15):
         raise ValueError('Altitude beyond model boundaries')
 
     # Calculating temperature
-    T = Tstdb[i]+A[i]*(H-Ht[i])+Tb
+    T = Tstdb[i] + A[i] * (H - Ht[i]) + Tb
 
     # Calculating pressure
     if A[i] == 0:
-        p = pb[i]*np.exp(-g0*(H-Ht[i])/R/(Tstdb[i]+Tb))
+        p = pb[i] * np.exp(-g0 * (H - Ht[i]) / R / (Tstdb[i] + Tb))
     else:
-        p = pb[i]*(T/(Tstdb[i]+Tb))**(-g0/A[i]/R)
+        p = pb[i] * (T / (Tstdb[i] + Tb)) ** (-g0 / A[i] / R)
 
     # Calculating density
-    rho = p/R/T
+    rho = p / R / T
 
     # Calculating viscosity with Sutherland's Formula
-    mu=mu0*(T0+C)/(T+C)*(T/T0)**(1.5)
+    mu = mu0 * (T0 + C) / (T + C) * (T / T0) ** (1.5)
 
-    return T,p,rho,mu
+    return T, p, rho, mu
 
 
 def calculate_energy_from_fuel(
@@ -172,3 +173,46 @@ def calculate_fuel_consumption_breakdown(
             qav_consumed_kg = consumed_fuel_kg
 
     return {'h2_consumed_kg': h2_consumed_kg, 'qav_consumed_kg': qav_consumed_kg}
+
+
+def discretize_phase(phase_data: Dict, max_segment_duration_min: float) -> List[Dict]:
+    """
+    Discretiza uma fase de voo longa em segmentos menores de duração aproximadamente igual.
+
+    Args:
+        phase_data (Dict): Dicionário contendo os dados da fase original
+                           (incluindo 'name', 'duration_min', e outros parâmetros).
+        max_segment_duration_min (float): A duração máxima desejada para cada segmento [minutos].
+
+    Returns:
+        List[Dict]: Uma lista de dicionários, onde cada dicionário representa um segmento
+                    da fase original, com duração ajustada e nome sequencial.
+                    Retorna a lista original com um único elemento se a duração
+                    original já for menor ou igual à duração máxima do segmento.
+    """
+    original_duration = phase_data.get('duration_min', 0.0)
+    original_name = phase_data.get('name', 'UnnamedPhase')
+
+    # Se a fase já for curta o suficiente, não discretiza
+    if original_duration <= max_segment_duration_min:
+        return [phase_data.copy()]  # Retorna uma cópia para evitar modificação do original
+
+    # Calcula o número de segmentos necessários
+    num_segments = math.ceil(original_duration / max_segment_duration_min)
+
+    # Calcula a duração de cada segmento (distribui igualmente)
+    segment_duration = original_duration / num_segments
+
+    discretized_phases = []
+    for i in range(num_segments):
+        # Cria uma cópia dos dados originais para o novo segmento
+        new_phase = phase_data.copy()
+
+        # Atualiza o nome e a duração
+        new_phase['name'] = f"{original_name}_{i + 1}"
+        new_phase['duration_min'] = segment_duration
+
+        # Adiciona o novo segmento à lista
+        discretized_phases.append(new_phase)
+
+    return discretized_phases

@@ -74,7 +74,6 @@ class CombustionChamber:
 
         return (temp_ratio - 1) / (term / cp_t03 - temp_ratio)
 
-    # Todo: criar uma função para vermos o quanto de energia vem de cada combustível
     def get_energy_contribution(self):
         """
         Calcula a contribuição de energia de cada combustível (hidrogênio e querosene)

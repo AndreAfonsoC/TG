@@ -721,7 +721,7 @@ class Turbofan:
             t_a (float, optional): Temperatura ambiente em K. Se None, calcula a partir da altitude.
             p_a (float, optional): Pressão ambiente em kPa. Se None, calcula a partir da altitude.
             delta_temperature (float, optional): Variação de temperatura em relação à ISA.
-            percentage_of_rated_thrust (float, optional): Percentual do empuxo de projeto a ser atingido.
+            percentage_of_rated_thrust (float, optional): Percentual do empuxo de projeto a ser atingido (0.0 a 1.0).
                                                          Se fornecido, otimiza N2 para encontrar o empuxo alvo.
         """
         if not hasattr(self, "_design_point"):
