@@ -144,7 +144,7 @@ class Turbofan:
         """
         Salva os valores dos parâmetros no ponto de projeto após a calibração.
         """
-        logger.info("Salvando ponto de projeto do motor...")
+        logger.debug("Salvando ponto de projeto do motor...")
         self._design_point = {
             "bpr": self.bpr,
             "prf": self.prf,
@@ -160,7 +160,7 @@ class Turbofan:
             "sea_level_air_flow": self.sea_level_air_flow,
             "rated_thrust": self.get_thrust(),
         }
-        logger.info(
+        logger.debug(
             f"Ponto de projeto salvo com empuxo de {self._design_point['rated_thrust']:.2f} kN."
         )
 
@@ -182,6 +182,7 @@ class Turbofan:
 
         # Se estiver no ponto de projeto, não faz nada (todos coeficientes são 1)
         if abs(N2_ratio - 1.0) <= 1e-4:
+            self.N2_ratio = 1.0
             self.N1_ratio = 1.0
             self.bpr = self._design_point["bpr"]
             self.prf = self._design_point["prf"]
@@ -776,10 +777,10 @@ class Turbofan:
             result = minimize_scalar(objective_function, method="Golden", )
 
         if result.fun > 0.01 or result.x >= 0.99 or result.x <= 0.01:
-            logger.warning(
-                f"Otimização de N2 não convergiu suficientemente. Erro final: {result.fun:.4f}"
-            )
-            logger.warning("Revertendo N2 para 100% do valor de projeto.")
+            if result.fun > 0.01:
+                logger.warning(f"Otimização de N2 não convergiu suficientemente. Erro final: {result.fun:.4f}")
+            if result.fun > 0.01 or result.x <= 0.01:
+                logger.warning("Revertendo N2 para 100% do valor de projeto.")
             self.update_from_N2(1.0)
             return
 

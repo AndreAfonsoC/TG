@@ -10,8 +10,6 @@ lb2N = 4.44822
 min2s = 60.0
 
 # Condições ao nível do mar padrão
-SEA_LEVEL_TEMPERATURE = 288.15  # K
-SEA_LEVEL_PRESSURE = 101.30  # kPa
 SEA_LEVEL_GRAVITY = 9.80665  # m/s²
 
 # ==============================================================================
@@ -24,12 +22,14 @@ SEA_LEVEL_GRAVITY = 9.80665  # m/s²
 # Fator H2O = (11.5 * 18) / 167 ≈ 1.24
 CO2_PER_KEROSENE_MASS = 3.15  # kg de CO2 por kg de querosene queimado; fonte: https://ansperformance.eu/economics/cba/standard-inputs/latest/chapters/amount_of_emissions_released_by_fuel_burn.html
 H2O_PER_KEROSENE_MASS = 1.237  # kg de H2O por kg de querosene queimado; fonte: https://ansperformance.eu/economics/cba/standard-inputs/latest/chapters/amount_of_emissions_released_by_fuel_burn.html
+KEROSENE_PCI = 45000  # Poder calorífico inferior do querosene [kJ/kg]; fonte: Turns, S. R. (2012). An Introduction to Combustion: Concepts and Applications (3rd ed.). McGraw-Hill.
 
 # Reação do Hidrogênio:
 # 2 H2 + O2 -> 2 H2O
 # Massa molar H2 ≈ 2 g/mol | Massa molar H2O = 18 g/mol
 # Fator H2O = (2 * 18) / (2 * 2) ≈ 8.94
 H2O_PER_HYDROGEN_MASS = 8.94  # kg de H2O por kg de hidrogênio queimado; fonte: Turns, S. R. (2012). An Introduction to Combustion: Concepts and Applications (3rd ed.). McGraw-Hill.
+H2_PCI = 120000  # Poder calorífico inferior do hidrogênio [kJ/kg]; fonte: Turns, S. R. (2012). An Introduction to Combustion: Concepts and Applications (3rd ed.). McGraw-Hill.
 
 
 # ==============================================
@@ -102,6 +102,9 @@ def atmosphere(z, Tba=288.15):
 
     return T, p, rho, mu
 
+# Condições ao nível do mar padrão
+SEA_LEVEL_TEMPERATURE, SEA_LEVEL_PRESSURE, SEA_LEVEL_DENSITY, SEA_LEVEL_VISCOSITY = atmosphere(0.0)
+SEA_LEVEL_PRESSURE = SEA_LEVEL_PRESSURE / 1000.0  # Converter Pa para kPa
 
 def calculate_energy_from_fuel(
         consumed_fuel_kg: float,

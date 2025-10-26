@@ -10,7 +10,9 @@ from src.turbofan import Turbofan
 from utils.aux_tools import (
     calculate_energy_from_fuel,
     calculate_fuel_consumption_breakdown,
-    min2s
+    min2s,
+    KEROSENE_PCI,
+    H2_PCI
 )
 
 # from src.turboprop import Turboprop # Exemplo para uso futuro
@@ -66,6 +68,8 @@ class MissionManager:
             self,
             engine: EngineType,
             num_engines: int,
+            design_fuel_flow_kgs: float,
+            design_t04_k: float,
             zero_fuel_weight: float
     ):
         """
@@ -84,6 +88,8 @@ class MissionManager:
 
         self.engine = engine
         self.num_engines = num_engines
+        self.design_fuel_flow_kgs = design_fuel_flow_kgs
+        self.design_t04_k = design_t04_k
         self.zero_fuel_weight = zero_fuel_weight
         self.flight_phases: List[Dict] = []
         self.results: Dict = {}
@@ -181,7 +187,7 @@ class MissionManager:
                 objective_function,
                 a=fuel_guess_bounds[0],
                 b=fuel_guess_bounds[1],
-                xtol=0.1,
+                xtol=0.01,
             )
             logger.info(
                 f"Solução encontrada! Combustível necessário para a missão: {optimal_fuel_mass:.2f} kg"
@@ -218,7 +224,7 @@ class MissionManager:
         summary_df = full_df[summary_cols]
 
         # Salva os arquivos CSV, aplicando o arredondamento na saída
-        summary_df.to_csv('mission_summary.csv', index=False, float_format='%.3f')
+        summary_df.to_csv('mission_summary.csv', index=False, float_format='%.4f')
         full_df.to_csv('mission_detailed.csv', index=False, float_format='%.4f')
         logger.info("Relatórios 'mission_summary.csv' e 'mission_detailed.csv' foram salvos.")
 
@@ -241,9 +247,6 @@ class MissionManager:
         logger.info(
             f"Emissão Total de CO2: {self.results['Emissão Total de CO2 (kg)']:.2f} kg"
         )
-        logger.info("Resultados detalhados por fase:")
-        # Log do DataFrame convertido para string para uma melhor formatação no arquivo de log
-        logger.info(f"\n{summary_df.round(3).to_string()}")
 
     def clear_mission(self):
         """
@@ -272,12 +275,19 @@ class MissionManager:
 
                 # Define fração de H2 e atualiza motor
                 if phase["burn_strategy"] == "hydrogen_only":
-                    engine_chi = 1.0
+                    phase_chi = 1.0
                 elif phase["burn_strategy"] == "kerosene_only":
-                    engine_chi = 0.0
+                    phase_chi = 0.0
                 else:
-                    engine_chi = chi_initial_mission
-                self.engine.update_final_config({"hydrogen_fraction": engine_chi})
+                    phase_chi = chi_initial_mission
+                # Recalibrando o motor (mas mantendo a temperatura de entrada na turbina T04)
+                self.engine.update_final_config({"hydrogen_fraction": phase_chi})
+                NEW_PCI = phase_chi * H2_PCI + (1 - phase_chi) * KEROSENE_PCI
+                self.engine.calibrate_turbofan(
+                    self.engine._design_point["rated_thrust"],
+                    self.design_fuel_flow_kgs * KEROSENE_PCI / NEW_PCI,
+                    t04_bounds=(self.design_t04_k-0.0001, self.design_t04_k)
+                )
 
                 # Atualiza ambiente e encontra N2 para o empuxo
                 thrust_percentage_required = phase["thrust_percentage"]
@@ -328,7 +338,7 @@ class MissionManager:
                     'Empuxo Requerido (kN)': thrust_required_kN * self.num_engines,  # Total
                     'Empuxo Obtido (kN)': thrust_obtained_kN * self.num_engines,  # Total
                     'Erro de Empuxo (%)': ((thrust_obtained_kN * self.num_engines / (
-                                self.engine._design_point["rated_thrust"] * self.num_engines)) - phase[
+                            self.engine._design_point["rated_thrust"] * self.num_engines)) - phase[
                                                "thrust_percentage"]) * 100 if phase["thrust_percentage"] > 0 else 0.0,
                     # Erro relativo ao % nominal
                     'Combustível Total (kg)': fuel_consumed_phase,
@@ -342,7 +352,7 @@ class MissionManager:
                     'N2 (%)': getattr(self.engine, 'N2_ratio', 1.0) * 100,
                     'N1 (%)': getattr(self.engine, 'N1_ratio', 1.0) * 100,
                     'f (razão comb/ar)': self.engine.fuel_to_air_ratio,
-                    'chi (fração H2 no motor)': engine_chi,
+                    'chi (fração H2 no motor)': phase_chi,
                     'Vazão de Ar (kg/s)': self.engine.get_air_flow(),  # Por motor
                     'T04 (K)': self.engine.t04,
                     'BPR': self.engine.bpr if hasattr(self.engine, 'bpr') else None,
@@ -357,10 +367,10 @@ class MissionManager:
                 totals['h2o'] += h2o_emitted_phase
 
         except ValueError as e:  # Falta de combustível
-            # logger.debug(f" -> Falha (ValueError): {e}") # TODO: Descomentar para depuração
+            logger.debug(f" -> Falha (ValueError): {e}")
             return {"total_fuel_consumed_kg": float("inf")}
         except RuntimeError as e:  # Falha na otimização de N2
-            # logger.debug(f" -> Falha (RuntimeError): {e}") # TODO: Descomentar para depuração
+            logger.debug(f" -> Falha (RuntimeError): {e}")
             return {"total_fuel_consumed_kg": float("inf")}
 
         return {

@@ -53,9 +53,9 @@ MDOT_BOUNDS_CALIBRATION = (300, 600)
 MISSION_CHI = 0.1  # Fração inicial de H2
 TANK_TYPE = "TYPE_IV"
 MAX_SEGMENT_DURATION_MIN = 15
-FUEL_GUESS_BOUNDS = (10, 20e3)
-USE_AERO_REFINEMENT = True  # Habilita o refinamento do perfil de empuxo via aerodinâmica
-USE_DISCRETIZE_PHASES = True  # Habilita a discretização automática de fases longas
+FUEL_GUESS_BOUNDS = (10, 200e3)
+USE_AERO_REFINEMENT = False  # Habilita o refinamento do perfil de empuxo via aerodinâmica
+USE_DISCRETIZE_PHASES = False  # Habilita a discretização automática de fases longas
 
 
 # --- Perfil de Voo Base ---
@@ -63,13 +63,13 @@ def get_base_flight_profile() -> list:
     """Retorna o perfil de voo base com estimativas de empuxo e dados aero."""
     # Contém dados completos, incluindo os necessários para Aerodynamics
     return [
-        {'name': 'Taxi (Saída)',   'duration_min': 1,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 100, 'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'kerosene_only'},
-        {'name': 'Decolagem',      'duration_min': 1,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 78,  'roc_ft_min': 3000,  'configuration': 'takeoff', 'burn_strategy': 'kerosene_only'},
+        {'name': 'Taxi (Saída)',   'duration_min': 1,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 100, 'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'kerosene_only'},    # 'kerosene_only', 'proportional', 'hydrogen_only'
+        {'name': 'Decolagem',      'duration_min': 1,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 100,  'roc_ft_min': 0,  'configuration': 'takeoff', 'burn_strategy': 'proportional'},
         {'name': 'Subida 1',       'duration_min': 8,   'altitude_ft': 5830,  'mach': 0.298, 'thrust_percentage': 20,  'roc_ft_min': 2500,  'configuration': 'clean',   'burn_strategy': 'proportional'},
         {'name': 'Subida 2',       'duration_min': 8,   'altitude_ft': 17500, 'mach': 0.494, 'thrust_percentage': 15,  'roc_ft_min': 2000,  'configuration': 'clean',   'burn_strategy': 'proportional'},
         {'name': 'Subida 3',       'duration_min': 8,   'altitude_ft': 29170, 'mach': 0.691, 'thrust_percentage': 7,   'roc_ft_min': 1500,  'configuration': 'clean',   'burn_strategy': 'proportional'},
-        {'name': 'Cruzeiro',       'duration_min': 150, 'altitude_ft': 35000, 'mach': 0.789, 'thrust_percentage': 18,  'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'hydrogen_only'},
-        {'name': 'Loiter',         'duration_min': 45,  'altitude_ft': 15000, 'mach': 0.400, 'thrust_percentage': 1,   'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'hydrogen_only'},
+        {'name': 'Cruzeiro',       'duration_min': 150, 'altitude_ft': 35000, 'mach': 0.789, 'thrust_percentage': 18,  'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Loiter',         'duration_min': 45,  'altitude_ft': 15000, 'mach': 0.400, 'thrust_percentage': 1,   'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'proportional'},
         {'name': 'Descida 1',      'duration_min': 8,   'altitude_ft': 29170, 'mach': 0.691, 'thrust_percentage': 1,   'roc_ft_min': -1500, 'configuration': 'clean',   'burn_strategy': 'proportional'},
         {'name': 'Descida 2',      'duration_min': 8,   'altitude_ft': 17500, 'mach': 0.494, 'thrust_percentage': 1,   'roc_ft_min': -2000, 'configuration': 'clean',   'burn_strategy': 'proportional'},
         {'name': 'Descida 3',      'duration_min': 8,   'altitude_ft': 5830,  'mach': 0.298, 'thrust_percentage': 1,   'roc_ft_min': -1000, 'configuration': 'landing', 'burn_strategy': 'proportional'},
@@ -84,9 +84,9 @@ def get_base_flight_profile() -> list:
 
 def calibrate_engine(engine_config: dict, thrust_target: float, ff_target: float) -> ENGINE_CLASS:
     """Calibra uma instância do motor e salva o ponto de projeto."""
-    print("\n" + "=" * 80)
+    logger.info("\n\n" + "=" * 120)
     logger.info("FASE DE CONFIGURAÇÃO: Calibrando o motor para o ponto de projeto...")
-    print("=" * 80)
+    logger.info("\n" + "=" * 120 + "\n")
 
     engine_instance = ENGINE_CLASS(engine_config)
     calibration_result = engine_instance.calibrate_turbofan(
@@ -107,9 +107,9 @@ def calibrate_engine(engine_config: dict, thrust_target: float, ff_target: float
 def run_simulation_stage(stage_name: str, mission_manager: MissionManager, flight_profile: list, chi: float,
                          tank_type: str) -> dict:
     """Configura, executa e retorna os resultados de um estágio da simulação."""
-    print("\n" + "=" * 80)  # Usar print para separadores visuais claros
+    logger.info("\n\n" + "=" * 120)
     logger.info(f"CONFIGURANDO {stage_name}")
-    print("=" * 80)
+    logger.info("\n" + "=" * 120 + "\n")
 
     mission_manager.clear_mission()  # Limpa fases anteriores
 
@@ -123,7 +123,6 @@ def run_simulation_stage(stage_name: str, mission_manager: MissionManager, fligh
 
     logger.info("Adicionando fases ao MissionManager:")
     for phase in discretized_profile:
-        logger.info(f"  - {phase['name']} ({phase['duration_min']:.1f} min)")
         mission_manager.add_phase(
             name=phase['name'],
             duration_min=phase['duration_min'],
@@ -147,9 +146,9 @@ def run_simulation_stage(stage_name: str, mission_manager: MissionManager, fligh
 
 def display_final_results(stage_name: str, results: dict, chi: float, zfw: float):
     """Exibe os resultados finais consolidados de uma simulação."""
-    print("\n" + "=" * 80)  # Separador visual
+    logger.info("\n\n" + "=" * 120)  # Separador visual
     logger.info(f"RESULTADOS CONSOLIDADOS - {stage_name}")
-    print("=" * 80)
+    logger.info("\n" + "=" * 120 + "\n")
 
     if results:
         fs_final_obj = results["final_fuel_system_object"]
@@ -180,27 +179,18 @@ def display_final_results(stage_name: str, results: dict, chi: float, zfw: float
 if __name__ == "__main__":
 
     # --- Calibração Inicial do Motor ---
-    initial_engine_config = {'mach': 0.0, 'altitude': 0, 'hydrogen_fraction': 0.0}
+    initial_engine_config = {'mach': 0.0, 'altitude': 0.0, 'hydrogen_fraction': 0.0}
     calibrated_engine = calibrate_engine(initial_engine_config, RATED_THRUST_TARGET_KN, FUEL_FLOW_TAKEOFF_TARGET_KGS)
 
     # --- Cria Modelo Aerodinâmico (para cálculo intermediário) ---
     aero_model = Aerodynamics.from_preset(AIRCRAFT_PRESET)
 
     # --- ETAPA 1: Simulação com Empuxo Fixo Estimado ---
-    # Configura motor para a fração de H2 da missão
-    mission_engine_config = initial_engine_config.copy()
-    mission_engine_config['hydrogen_fraction'] = MISSION_CHI
-    calibrated_engine.update_final_config(mission_engine_config)  # Atualiza motor calibrado
-    if MISSION_CHI > 0.0:
-        t04_design = calibrated_engine._design_point['t04']  # Mantém T04 do projeto original
-        calibrated_engine.calibrate_turbofan(
-            rated_thrust_kN=RATED_THRUST_TARGET_KN, fuel_flow_kgs=FUEL_FLOW_TAKEOFF_TARGET_KGS,
-            t04_bounds=(T04_BOUNDS_CALIBRATION[0], t04_design), m_dot_bounds=MDOT_BOUNDS_CALIBRATION
-        )
 
     # Cria MissionManager
     mission_stage1_manager = MissionManager(engine=calibrated_engine, zero_fuel_weight=ZERO_FUEL_WEIGHT_KG,
-                                            num_engines=NUM_ENGINES)
+                                            num_engines=NUM_ENGINES, design_fuel_flow_kgs=FUEL_FLOW_TAKEOFF_TARGET_KGS,
+                                            design_t04_k=calibrated_engine._design_point['t04'])
 
     # Obtém perfil base e define estratégia de queima
     profile_stage1 = get_base_flight_profile()
@@ -223,9 +213,9 @@ if __name__ == "__main__":
 
     if USE_AERO_REFINEMENT:
         # --- CÁLCULO INTERMEDIÁRIO: Refinar Perfil de Empuxo ---
-        print("\n" + "=" * 80)  # Separador visual
+        logger.info("\n\n" + "=" * 120)  # Separador visual
         logger.info("CÁLCULO INTERMEDIÁRIO: Refinando Perfil de Empuxo usando Aerodinâmica")
-        print("=" * 80)
+        logger.info("\n" + "=" * 120 + "\n")
 
         df_detailed_stage1 = results_stage1['detailed_df']
         profile_stage2 = []
