@@ -75,6 +75,7 @@ class FuelSystem:
     def consume_fuel(
             self,
             consumed_fuel_mass: float,
+            chi: float,
             burn_strategy: Literal["proportional", "hydrogen_only", "kerosene_only"],
     ) -> None:
         """
@@ -106,18 +107,18 @@ class FuelSystem:
 
         elif burn_strategy == "proportional":
             if (
-                    self.chi_initial_mission == 0 and consumed_fuel_mass > 0
+                    chi == 0 and consumed_fuel_mass > 0
             ):  # Caso de queima só de querosene
-                self.consume_fuel(consumed_fuel_mass, "kerosene_only")
+                self.consume_fuel(consumed_fuel_mass, chi, "kerosene_only")
                 return
             if (
-                    self.chi_initial_mission == 1 and consumed_fuel_mass > 0
+                    chi == 1 and consumed_fuel_mass > 0
             ):  # Caso de queima só de H2
-                self.consume_fuel(consumed_fuel_mass, "hydrogen_only")
+                self.consume_fuel(consumed_fuel_mass, chi, "hydrogen_only")
                 return
 
-            h2_to_consume = consumed_fuel_mass * self.chi_initial_mission
-            kerosene_to_consume = consumed_fuel_mass * (1 - self.chi_initial_mission)
+            h2_to_consume = consumed_fuel_mass * chi
+            kerosene_to_consume = consumed_fuel_mass * (1 - chi)
 
             if self.hydrogen_mass_remaining < h2_to_consume:
                 raise ValueError(

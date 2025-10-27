@@ -70,7 +70,8 @@ class MissionManager:
             num_engines: int,
             design_fuel_flow_kgs: float,
             design_t04_k: float,
-            zero_fuel_weight: float
+            zero_fuel_weight: float,
+            misison_avg_chi: float | None = None,
     ):
         """
         Inicializa o MissionManager.
@@ -91,6 +92,7 @@ class MissionManager:
         self.design_fuel_flow_kgs = design_fuel_flow_kgs
         self.design_t04_k = design_t04_k
         self.zero_fuel_weight = zero_fuel_weight
+        self.mission_avg_chi = misison_avg_chi
         self.flight_phases: List[Dict] = []
         self.results: Dict = {}
         logger.info("MissionManager inicializado com sucesso.")
@@ -141,7 +143,7 @@ class MissionManager:
 
     def solve_mission_fuel(
             self,
-            chi_initial_mission: float = 0.0,
+            chi_burning: float = 0.0,
             tank_type: Literal["TYPE_I", "TYPE_II", "TYPE_III", "TYPE_IV"] = "TYPE_IV",
             fuel_guess_bounds: tuple = (
                     1.0,
@@ -151,12 +153,13 @@ class MissionManager:
         """
         Encontra a massa de combustível inicial necessária para a missão e executa a simulação final.
         """
+        self.mission_avg_chi = chi_burning
         logger.info("--- Iniciando Processo de Solução de Combustível da Missão ---")
 
         def objective_function(initial_fuel_guess: float) -> float:
             # logger.debug(f"Testando com combustível inicial = {initial_fuel_guess:.2f} kg...") # Descomente para depuração
             sim_results = self._run_single_simulation(
-                initial_fuel_guess, chi_initial_mission, tank_type
+                initial_fuel_guess, chi_burning, tank_type
             )
             consumed_fuel = sim_results.get("total_fuel_consumed_kg", float("inf"))
             difference = initial_fuel_guess - consumed_fuel
@@ -202,7 +205,7 @@ class MissionManager:
         logger.info("Executando simulação final com os valores ótimos...")
         try:
             final_results = self._run_single_simulation(
-                optimal_fuel_mass, chi_initial_mission, tank_type
+                optimal_fuel_mass, chi_burning, tank_type
             )
             # Verifica se o empuxo necessário foi atingido em cada fase
             for phase_detail in final_results.get("phase_details", []):
@@ -230,7 +233,7 @@ class MissionManager:
 
         self.results = {
             'Combustível Inicial (kg)': optimal_fuel_mass,
-            'Fração de H2 da Missão (%)': chi_initial_mission * 100,
+            'Fração de H2 da Missão (%)': chi_burning * 100,
             'Tipo de Tanque': tank_type,
             'Combustível Total Consumido (kg)': final_results['total_fuel_consumed_kg'],
             'Emissão Total de CO2 (kg)': final_results['total_co2_emitted_kg'],
@@ -257,13 +260,19 @@ class MissionManager:
         logger.info("Perfil da missão foi limpo.")
 
     def _run_single_simulation(
-            self, initial_fuel_mass: float, chi_initial_mission: float,
+            self, initial_fuel_mass: float, chi_burning: float,
             tank_type: Literal["TYPE_I", "TYPE_II", "TYPE_III", "TYPE_IV"],
     ) -> dict:
         """Executa uma simulação com combustível inicial estimado."""
-        fuel_system = FuelSystem(initial_fuel_mass, chi_initial_mission, tank_type)
+        fuel_system = FuelSystem(initial_fuel_mass, self.mission_avg_chi, tank_type)
         phase_details = []
-        totals = {'fuel': 0.0, 'co2': 0.0, 'h2o': 0.0}
+        totals = {
+            'fuel': 0.0,
+            'h2': 0.0,
+            'qav': 0.0,
+            'co2': 0.0,
+            'h2o': 0.0
+        }
 
         # --- MODIFICAÇÃO: Rastreamento de Peso ---
         current_weight_kg = self.zero_fuel_weight + fuel_system.get_total_weight_at_takeoff()
@@ -279,7 +288,7 @@ class MissionManager:
                 elif phase["burn_strategy"] == "kerosene_only":
                     phase_chi = 0.0
                 else:
-                    phase_chi = chi_initial_mission
+                    phase_chi = chi_burning
                 # Recalibrando o motor (mas mantendo a temperatura de entrada na turbina T04)
                 self.engine.update_final_config({"hydrogen_fraction": phase_chi})
                 NEW_PCI = phase_chi * H2_PCI + (1 - phase_chi) * KEROSENE_PCI
@@ -306,7 +315,7 @@ class MissionManager:
                 h2o_emitted_phase = emissions_flow['h2o_flow_kgs'] * duration_sec * self.num_engines  # Total
 
                 # Consome combustível
-                fuel_system.consume_fuel(fuel_consumed_phase, phase['burn_strategy'])
+                fuel_system.consume_fuel(fuel_consumed_phase, chi_burning, phase['burn_strategy'])
 
                 # --- MODIFICAÇÃO: Calcula pesos final e médio ---
                 final_phase_weight_kg = initial_phase_weight_kg - fuel_consumed_phase
@@ -314,10 +323,10 @@ class MissionManager:
                 current_weight_kg = final_phase_weight_kg  # Atualiza para próxima fase
 
                 # Decomposição de consumo e energia
-                fuel_breakdown = calculate_fuel_consumption_breakdown(fuel_consumed_phase, chi_initial_mission,
+                fuel_breakdown = calculate_fuel_consumption_breakdown(fuel_consumed_phase, chi_burning,
                                                                       phase['burn_strategy'])
                 energy_breakdown = calculate_energy_from_fuel(
-                    fuel_consumed_phase, chi_initial_mission, phase['burn_strategy'],
+                    fuel_consumed_phase, chi_burning, phase['burn_strategy'],
                     self.engine.kerosene_PCI, self.engine.hydrogen_PCI
                 )
 
@@ -363,15 +372,18 @@ class MissionManager:
 
                 # Acumula totais
                 totals['fuel'] += fuel_consumed_phase
+                totals['h2'] += fuel_breakdown['h2_consumed_kg']
+                totals['qav'] += fuel_breakdown['qav_consumed_kg']
                 totals['co2'] += co2_emitted_phase
                 totals['h2o'] += h2o_emitted_phase
-
         except ValueError as e:  # Falta de combustível
             logger.debug(f" -> Falha (ValueError): {e}")
             return {"total_fuel_consumed_kg": float("inf")}
         except RuntimeError as e:  # Falha na otimização de N2
             logger.debug(f" -> Falha (RuntimeError): {e}")
             return {"total_fuel_consumed_kg": float("inf")}
+
+        self.mission_avg_chi = totals['h2'] / totals['fuel']
 
         return {
             "total_fuel_consumed_kg": totals['fuel'],

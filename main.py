@@ -50,12 +50,12 @@ T04_BOUNDS_CALIBRATION = (1400, 1800)
 MDOT_BOUNDS_CALIBRATION = (300, 600)
 
 # --- Missão ---
-MISSION_CHI = 0.1  # Fração inicial de H2
+MISSION_CHI = 0.2  # Fração inicial de H2
 TANK_TYPE = "TYPE_IV"
 MAX_SEGMENT_DURATION_MIN = 15
 FUEL_GUESS_BOUNDS = (10, 200e3)
 USE_AERO_REFINEMENT = False  # Habilita o refinamento do perfil de empuxo via aerodinâmica
-USE_DISCRETIZE_PHASES = False  # Habilita a discretização automática de fases longas
+USE_DISCRETIZE_PHASES = True  # Habilita a discretização automática de fases longas
 
 
 # --- Perfil de Voo Base ---
@@ -65,14 +65,14 @@ def get_base_flight_profile() -> list:
     return [
         {'name': 'Taxi (Saída)',   'duration_min': 1,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 100, 'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'kerosene_only'},    # 'kerosene_only', 'proportional', 'hydrogen_only'
         {'name': 'Decolagem',      'duration_min': 1,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 100,  'roc_ft_min': 0,  'configuration': 'takeoff', 'burn_strategy': 'proportional'},
-        {'name': 'Subida 1',       'duration_min': 8,   'altitude_ft': 5830,  'mach': 0.298, 'thrust_percentage': 20,  'roc_ft_min': 2500,  'configuration': 'clean',   'burn_strategy': 'proportional'},
-        {'name': 'Subida 2',       'duration_min': 8,   'altitude_ft': 17500, 'mach': 0.494, 'thrust_percentage': 15,  'roc_ft_min': 2000,  'configuration': 'clean',   'burn_strategy': 'proportional'},
-        {'name': 'Subida 3',       'duration_min': 8,   'altitude_ft': 29170, 'mach': 0.691, 'thrust_percentage': 7,   'roc_ft_min': 1500,  'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Subida 1',       'duration_min': 8,   'altitude_ft': 5830,  'mach': 0.298, 'thrust_percentage': 20,  'roc_ft_min': 2400,  'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Subida 2',       'duration_min': 8,   'altitude_ft': 17500, 'mach': 0.494, 'thrust_percentage': 15,  'roc_ft_min': 1500,  'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Subida 3',       'duration_min': 8,   'altitude_ft': 29170, 'mach': 0.691, 'thrust_percentage': 7,   'roc_ft_min': 750,  'configuration': 'clean',   'burn_strategy': 'proportional'},
         {'name': 'Cruzeiro',       'duration_min': 150, 'altitude_ft': 35000, 'mach': 0.789, 'thrust_percentage': 18,  'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'proportional'},
-        {'name': 'Loiter',         'duration_min': 45,  'altitude_ft': 15000, 'mach': 0.400, 'thrust_percentage': 1,   'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'proportional'},
-        {'name': 'Descida 1',      'duration_min': 8,   'altitude_ft': 29170, 'mach': 0.691, 'thrust_percentage': 1,   'roc_ft_min': -1500, 'configuration': 'clean',   'burn_strategy': 'proportional'},
-        {'name': 'Descida 2',      'duration_min': 8,   'altitude_ft': 17500, 'mach': 0.494, 'thrust_percentage': 1,   'roc_ft_min': -2000, 'configuration': 'clean',   'burn_strategy': 'proportional'},
-        {'name': 'Descida 3',      'duration_min': 8,   'altitude_ft': 5830,  'mach': 0.298, 'thrust_percentage': 1,   'roc_ft_min': -1000, 'configuration': 'landing', 'burn_strategy': 'proportional'},
+        {'name': 'Loiter',         'duration_min': 45,  'altitude_ft': 15000, 'mach': 0.400, 'thrust_percentage': 18,   'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Descida 1',      'duration_min': 8,   'altitude_ft': 29170, 'mach': 0.691, 'thrust_percentage': 10,   'roc_ft_min': -1500, 'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Descida 2',      'duration_min': 8,   'altitude_ft': 17500, 'mach': 0.494, 'thrust_percentage': 10,   'roc_ft_min': -2000, 'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Descida 3',      'duration_min': 8,   'altitude_ft': 5830,  'mach': 0.298, 'thrust_percentage': 10,   'roc_ft_min': -1000, 'configuration': 'landing', 'burn_strategy': 'proportional'},
         {'name': 'Pouso',          'duration_min': 1,   'altitude_ft': 0,     'mach': 0.200, 'thrust_percentage': 7,   'roc_ft_min': -500,  'configuration': 'landing', 'burn_strategy': 'proportional'},
         {'name': 'Taxi (Chegada)', 'duration_min': 5,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 7,   'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'proportional'},
     ]
@@ -104,7 +104,7 @@ def calibrate_engine(engine_config: dict, thrust_target: float, ff_target: float
     return engine_instance
 
 
-def run_simulation_stage(stage_name: str, mission_manager: MissionManager, flight_profile: list, chi: float,
+def run_simulation_stage(stage_name: str, mission_manager: MissionManager, flight_profile: list, mission_chi: float,
                          tank_type: str) -> dict:
     """Configura, executa e retorna os resultados de um estágio da simulação."""
     logger.info("\n\n" + "=" * 120)
@@ -136,7 +136,7 @@ def run_simulation_stage(stage_name: str, mission_manager: MissionManager, fligh
 
     # Executa a solução da missão
     mission_manager.solve_mission_fuel(
-        chi_initial_mission=chi,
+        chi_burning=mission_chi,
         tank_type=tank_type,
         fuel_guess_bounds=FUEL_GUESS_BOUNDS
     )
@@ -260,8 +260,7 @@ if __name__ == "__main__":
             else:
                 # Mantém o thrust_percentage original para fases fixas
                 original_phase = next((p for p in get_base_flight_profile() if p['name'] == phase_base_name), None)
-                new_phase_s2['thrust_percentage'] = original_phase.get('thrust_percentage',
-                                                                       7.0)  # Usa original ou fallback
+                new_phase_s2['thrust_percentage'] = original_phase.get('thrust_percentage',7.0)  # Usa original ou fallback
                 logger.debug(
                     f"Fase '{new_phase_s2['Fase']}': Mantendo empuxo fixo de {new_phase_s2['thrust_percentage']:.1f}%")
 
@@ -272,7 +271,7 @@ if __name__ == "__main__":
             new_phase_s2['mach'] = phase_s1['Mach']
             new_phase_s2['roc_ft_min'] = phase_s1['ROC (ft/min)']
             new_phase_s2['configuration'] = phase_s1['Configuração']
-            new_phase_s2['burn_strategy'] = 'kerosene_only' if MISSION_CHI == 0.0 else 'proportional'
+            new_phase_s2['burn_strategy'] = phase_s1['Estratégia de Queima']
             profile_stage2.append(new_phase_s2)
 
         # --- ETAPA 2: Simulação com Empuxo Refinado ---
