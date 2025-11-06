@@ -670,7 +670,9 @@ class Turbofan:
         }
 
     def plot_calibration_result(
-            self, target_tsfc: float, t04_range: ndarray = np.arange(1200, 2000, 10)
+            self, target_tsfc: float,
+            t04_range: ndarray = np.arange(1200, 1800, 1),
+            title: str = "Análise da Relação TSFC vs. T04",
     ):
         original_t04 = self.t04
         tsfc_results = []
@@ -686,7 +688,7 @@ class Turbofan:
             df_plot,
             x="T04 (K)",
             y="TSFC (kg/s/kN)",
-            title="Análise da Relação TSFC vs. T04",
+            title=title,
         )
         fig.add_hline(
             y=target_tsfc,
@@ -695,14 +697,14 @@ class Turbofan:
             annotation_position="bottom right",
         )
         fig.update_layout(
-            xaxis_title="Temperatura de Entrada da Turbina (T04)",
-            yaxis_title="Consumo Específico (TSFC)",
+            xaxis_title="T04 (K)",
+            yaxis_title="TSFC (kg/(kN.s))",
             template="plotly",
         )
-        fig.show()
-
         # Restaurar o valor original de T04
         self.set_t04(original_t04)
+
+        return fig
 
     def update_environment(
             self,

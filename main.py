@@ -50,11 +50,11 @@ T04_BOUNDS_CALIBRATION = (1400, 1800)
 MDOT_BOUNDS_CALIBRATION = (300, 600)
 
 # --- Missão ---
-MISSION_CHI = 0.2  # Fração inicial de H2
+MISSION_CHI = 0.1  # Fração inicial de H2
 TANK_TYPE = "TYPE_IV"
 MAX_SEGMENT_DURATION_MIN = 15
 FUEL_GUESS_BOUNDS = (10, 200e3)
-USE_AERO_REFINEMENT = False  # Habilita o refinamento do perfil de empuxo via aerodinâmica
+USE_AERO_REFINEMENT = True  # Habilita o refinamento do perfil de empuxo via aerodinâmica
 USE_DISCRETIZE_PHASES = True  # Habilita a discretização automática de fases longas
 
 
@@ -63,13 +63,13 @@ def get_base_flight_profile() -> list:
     """Retorna o perfil de voo base com estimativas de empuxo e dados aero."""
     # Contém dados completos, incluindo os necessários para Aerodynamics
     return [
-        {'name': 'Taxi (Saída)',   'duration_min': 1,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 100, 'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'kerosene_only'},    # 'kerosene_only', 'proportional', 'hydrogen_only'
+        {'name': 'Taxi (Saída)',   'duration_min': 1,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 7, 'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'kerosene_only'},    # 'kerosene_only', 'proportional', 'hydrogen_only'
         {'name': 'Decolagem',      'duration_min': 1,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 100,  'roc_ft_min': 0,  'configuration': 'takeoff', 'burn_strategy': 'proportional'},
-        {'name': 'Subida 1',       'duration_min': 8,   'altitude_ft': 5830,  'mach': 0.298, 'thrust_percentage': 20,  'roc_ft_min': 2400,  'configuration': 'clean',   'burn_strategy': 'proportional'},
-        {'name': 'Subida 2',       'duration_min': 8,   'altitude_ft': 17500, 'mach': 0.494, 'thrust_percentage': 15,  'roc_ft_min': 1500,  'configuration': 'clean',   'burn_strategy': 'proportional'},
-        {'name': 'Subida 3',       'duration_min': 8,   'altitude_ft': 29170, 'mach': 0.691, 'thrust_percentage': 7,   'roc_ft_min': 750,  'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Subida 1',       'duration_min': 8,   'altitude_ft': 5830,  'mach': 0.298, 'thrust_percentage': 50,  'roc_ft_min': 2400,  'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Subida 2',       'duration_min': 8,   'altitude_ft': 17500, 'mach': 0.494, 'thrust_percentage': 30,  'roc_ft_min': 1500,  'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Subida 3',       'duration_min': 8,   'altitude_ft': 29170, 'mach': 0.691, 'thrust_percentage': 20,   'roc_ft_min': 750,  'configuration': 'clean',   'burn_strategy': 'proportional'},
         {'name': 'Cruzeiro',       'duration_min': 150, 'altitude_ft': 35000, 'mach': 0.789, 'thrust_percentage': 18,  'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'proportional'},
-        {'name': 'Loiter',         'duration_min': 45,  'altitude_ft': 15000, 'mach': 0.400, 'thrust_percentage': 18,   'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Loiter',         'duration_min': 45,  'altitude_ft': 15000, 'mach': 0.400, 'thrust_percentage': 15,   'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'proportional'},
         {'name': 'Descida 1',      'duration_min': 8,   'altitude_ft': 29170, 'mach': 0.691, 'thrust_percentage': 10,   'roc_ft_min': -1500, 'configuration': 'clean',   'burn_strategy': 'proportional'},
         {'name': 'Descida 2',      'duration_min': 8,   'altitude_ft': 17500, 'mach': 0.494, 'thrust_percentage': 10,   'roc_ft_min': -2000, 'configuration': 'clean',   'burn_strategy': 'proportional'},
         {'name': 'Descida 3',      'duration_min': 8,   'altitude_ft': 5830,  'mach': 0.298, 'thrust_percentage': 10,   'roc_ft_min': -1000, 'configuration': 'landing', 'burn_strategy': 'proportional'},
@@ -195,6 +195,23 @@ if __name__ == "__main__":
     # Obtém perfil base e define estratégia de queima
     profile_stage1 = get_base_flight_profile()
 
+    # Confere envelope da Etapa 1
+    rated_thrust_total_kN = calibrated_engine._design_point['rated_thrust'] * NUM_ENGINES
+    for phase in profile_stage1:
+        envelope = calibrated_engine.get_thrust_envelope(
+            mach=phase['mach'],
+            altitude_ft=phase['altitude_ft']
+        )
+        max_thrust_perc = aero_model.convert_thrust_to_percentage(
+            envelope['max_thrust_kN'] * NUM_ENGINES,
+            rated_thrust_total_kN
+        )
+        perc_thrust = phase['thrust_percentage']
+        if perc_thrust > max_thrust_perc:
+            raise ValueError(
+                f"Fase '{phase['name']}': Empuxo necessário ({perc_thrust:.1f}%) excede máximo possível "
+                f"({max_thrust_perc:.1f}%).")
+
     # Roda Etapa 1
     results_stage1 = run_simulation_stage(
         "ETAPA 1 (Empuxo Fixo)",
@@ -219,7 +236,6 @@ if __name__ == "__main__":
 
         df_detailed_stage1 = results_stage1['detailed_df']
         profile_stage2 = []
-        rated_thrust_total_kN = calibrated_engine._design_point['rated_thrust'] * NUM_ENGINES
 
         for index, phase_s1 in df_detailed_stage1.iterrows():
             new_phase_s2 = phase_s1.to_dict()  # Copia todos os dados da fase discretizada
@@ -247,7 +263,8 @@ if __name__ == "__main__":
 
                 if perc_thrust_s2 > max_thrust_perc:
                     logger.warning(
-                        f"Fase '{phase_s1['Fase']}': Empuxo calculado ({perc_thrust_s2:.1f}%) excede máximo ({max_thrust_perc:.1f}%). Limitando.")
+                        f"Fase '{phase_s1['Fase']}': Empuxo calculado ({perc_thrust_s2:.1f}%) excede máximo ({max_thrust_perc:.1f}%). "
+                        f"Modificando-o para o máximo possível...")
                     perc_thrust_s2 = max_thrust_perc
                 else:
                     logger.info(
