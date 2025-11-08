@@ -1,7 +1,7 @@
 import logging
 import os
 import numpy as np
-from scipy.optimize import minimize_scalar
+from scipy.optimize import minimize_scalar, brentq
 
 from src.components.combustion_chamber import CombustionChamber
 from src.components.compressor import Compressor
@@ -48,8 +48,7 @@ class Turboprop:
         self.altitude = self.final_config["altitude"]
         t_a_altitude, p_a_altitude, _, _ = atmosphere(self.altitude * ft2m)
         self.t_a = self.final_config.get("t_a", t_a_altitude) or t_a_altitude
-        self.p_a = self.final_config.get("p_a",
-                                         p_a_altitude / 1000) or p_a_altitude / 1000  # Divide por 1000 para passar para kPa
+        self.p_a = self.final_config.get("p_a", p_a_altitude / 1000) or p_a_altitude / 1000
 
         # --- Eficiências e Gammas ---
         self.eta_inlet = self.final_config["eta_inlet"]
@@ -117,76 +116,45 @@ class Turboprop:
     def update_turboprop_components(self):
         # 1. Difusor
         self.inlet = Inlet(self.t_a, self.p_a, self.mach, self.eta_inlet, self.gamma_inlet)
-        self.t02 = self.inlet.get_total_temperature()
-        self.p02 = self.inlet.get_total_pressure()
+        self.t02, self.p02 = self.inlet.get_total_temperature(), self.inlet.get_total_pressure()
 
         # 2. Compressor
         self.compressor = Compressor(self.t02, self.p02, self.prc, self.eta_compressor, self.gamma_compressor)
-        self.t03 = self.compressor.get_total_temperature()
-        self.p03 = self.compressor.get_total_pressure()
+        self.t03, self.p03 = self.compressor.get_total_temperature(), self.compressor.get_total_pressure()
 
         # 3. Câmara de Combustão
         self.combustion_chamber = CombustionChamber(
-            self.t03,
-            self.p03,
-            self.Cp,
-            self.t04,
-            self.eta_camara,
-            self.gamma_camara,
-            self.kerosene_PCI,
-            self.hydrogen_PCI,
-            self.hydrogen_fraction,
-            self.pressure_loss,
-        )
+            self.t03, self.p03, self.Cp, self.t04, self.eta_camara, self.gamma_camara,
+            self.kerosene_PCI, self.hydrogen_PCI, self.hydrogen_fraction, self.pressure_loss)
         self.p04 = self.combustion_chamber.get_total_pressure()
         self.t04 = self.combustion_chamber.get_total_temperature_out()
         self.fuel_to_air_ratio = self.combustion_chamber.get_fuel_to_air_ratio()
 
         # 4. Turbina do compressor
-        self.compressor_turbine = Turbine(
-            self.t04,
-            self.p04,
-            self.t02,
-            self.t03,
-            self.eta_turbina_compressor,
-            self.gamma_turbina_compressor,
-        )
-        self.t05 = self.compressor_turbine.get_total_temperature()
-        self.p05 = self.compressor_turbine.get_total_pressure()
+        self.compressor_turbine = Turbine(self.t04, self.p04, self.t02, self.t03, self.eta_turbina_compressor,
+                                          self.gamma_turbina_compressor)
+        self.t05, self.p05 = self.compressor_turbine.get_total_temperature(), self.compressor_turbine.get_total_pressure()
 
         # 5. Turbina Livre
-        self.power_turbine = PowerTurbine(
-            self.t05,
-            self.p05,
-            self.pr_tl,
-            self.eta_turbina_livre,
-            self.gamma_turbina_livre,
-            self.Cp_tl,
-        )
+        self.power_turbine = PowerTurbine(self.t05, self.p05, self.pr_tl, self.eta_turbina_livre,
+                                          self.gamma_turbina_livre, self.Cp_tl)
         self.p06 = self.power_turbine.get_total_pressure()
+        self.t06 = self.power_turbine.get_total_temperature()
+
         self.total_iso_temperature = self.power_turbine.get_total_isentropic_temperature()
         self.iso_work = self.power_turbine.get_isentropic_work()
         self.real_work = self.power_turbine.get_real_work()
-        self.t06 = self.power_turbine.get_total_temperature()
 
-        if self.air_flow is None:
-            raise ValueError("Vazão de ar não definida.")
-        else:
-            self.turbine_airflow = self.power_turbine.get_total_air_flow(self.air_flow, self.fuel_to_air_ratio)
-            self.pot_th = self.power_turbine.get_power(self.air_flow, self.fuel_to_air_ratio)
+        if self.air_flow is None: raise ValueError("Vazão de ar não definida.")
+        self.turbine_airflow = self.power_turbine.get_total_air_flow(self.air_flow, self.fuel_to_air_ratio)
+        self.pot_th = self.power_turbine.get_power(self.air_flow, self.fuel_to_air_ratio)
 
         self.pot_tl = self.pot_th
         self.pot_gear = self.gearbox_efficiency * self.pot_tl
 
-        # 6. Bocal dos gases quentesf
-        self.core_nozzle = Nozzle(
-            self.t06,
-            self.p06,
-            self.p_a,
-            self.eta_bocal_quente,
-            self.gamma_bocal_quente,
-            self.mean_R_air,
-        )
+        # 6. Bocal dos gases quentes
+        self.core_nozzle = Nozzle(self.t06, self.p06, self.p_a, self.eta_bocal_quente, self.gamma_bocal_quente,
+                                  self.mean_R_air)
         self.u_core = self.core_nozzle.get_exhaust_velocity()
 
         # 9. Velocidade de voo
@@ -215,24 +183,9 @@ class Turboprop:
             self.update_turboprop_components()
             return abs(self.pot_th - self.ref_pot_th)
 
-        # 2. Executar o otimizador
-        result = minimize_scalar(
-            objective_function,
-            bounds=(pr_tl_min, pr_tl_max),
-            method='bounded'
-        )
-
-        # 3. Verificar o sucesso e aplicar o resultado
-        if not result.success:
-            raise RuntimeError(f"A calibração de pot_th falhou: {result.message}")
-
-        if result.fun > 0.01:
-            result = minimize_scalar(objective_function, method="Golden")
-
-        best_pr_tl = result.x
-
-        # 4. Atualizar o estado final do objeto com o valor ótimo encontrado
-        self.set_pr_tl(best_pr_tl)
+        result = minimize_scalar(objective_function, bounds=(pr_tl_min, pr_tl_max), method='bounded')
+        if not result.success: raise RuntimeError(f"A calibração de pot_th falhou: {result.message}")
+        self.set_pr_tl(result.x)
         self.update_turboprop_components()
         self.save_design_point()
         logger.info(f"Calibração de pot_th concluída. pr_tl ótimo: {result.x:.4f}")
@@ -262,18 +215,8 @@ class Turboprop:
             self.update_from_N2(N2)
             return abs(self.pot_th - self.max_gearbox_power)
 
-        # 2. Executa o otimizador para encontrar o N2 ótimo.
-        result = minimize_scalar(
-            objective_function,
-            bounds=(N2_min, N2_max),
-            method='bounded'
-        )
-
-        # 3. Valida o resultado e lança um erro se a calibração falhar.
-        if not result.success:
-            raise RuntimeError(f"A calibração de N2 falhou: {result.message}")
-
-        # 4. Atualiza o estado final do objeto com o valor ótimo e salva.
+        result = minimize_scalar(objective_function, bounds=(N2_min, N2_max), method='bounded')
+        if not result.success: raise RuntimeError(f"A calibração de N2 falhou: {result.message}")
         self.update_from_N2(result.x)
         logger.info(f"Calibração de N2 para max_gearbox_power concluída. N2 ótimo: {result.x:.4f}")
 
@@ -283,17 +226,10 @@ class Turboprop:
         """
         logger.info("Salvando ponto de projeto do turboprop...")
         self._design_point = {
-            'pr_tl': self.pr_tl,
-            'prc': self.prc,
-            't04': self.t04,
-            'eta_compressor': self.eta_compressor,
-            'eta_camara': self.eta_camara,
-            'eta_turbina_livre': self.eta_turbina_livre,
-            'eta_turbina_compressor': self.eta_turbina_compressor,
-            'eta_bocal_quente': self.eta_bocal_quente,
-            'sea_level_air_flow': self.sea_level_air_flow,
-            # Salva o empuxo "rated" como o empuxo estático total no ponto de projeto
-            # para servir de referência para input de porcentagem.
+            'pr_tl': self.pr_tl, 'prc': self.prc, 't04': self.t04,
+            'eta_compressor': self.eta_compressor, 'eta_camara': self.eta_camara,
+            'eta_turbina_livre': self.eta_turbina_livre, 'eta_turbina_compressor': self.eta_turbina_compressor,
+            'eta_bocal_quente': self.eta_bocal_quente, 'sea_level_air_flow': self.sea_level_air_flow,
             'rated_thrust': self.get_thrust(in_kN=True),
             'rated_power': self.max_gearbox_power if self.max_gearbox_power else self.ref_pot_th
         }
@@ -312,113 +248,157 @@ class Turboprop:
         models = self._correction_models
         N2_ratio = N2 / N2_design
 
-        # Permite N2_ratio == 1.0 recalcular para garantir consistência se o ambiente mudou
-        # if abs(N2_ratio - 1.0) <= 1e-4: return
+        # Se estiver no ponto de projeto, não faz nada (todos coeficientes são 1)
+        if abs(N2_ratio - 1.0) <= 1e-4:
+            self.N2_ratio = 1.0
+            self.N1_ratio = 1.0
+            self.prc = self._design_point["prc"]
+            self.t04 = self._design_point["t04"]
+            self.eta_compressor = self._design_point["eta_compressor"]
+            self.eta_turbina_livre = self._design_point['eta_turbina_livre']
+            self.eta_turbina_compressor = self._design_point["eta_turbina_compressor"]
+            self.eta_camara = self._design_point["eta_camara"]
+            self.pr_tl = self._design_point['pr_tl']
+            self.set_sea_level_air_flow(self._design_point["sea_level_air_flow"])
+        else:
+            N1_ratio = models['N1_from_N2'](N2_ratio)
+            self.N1_ratio = N1_ratio
+            self.N2_ratio = N2_ratio
 
-        N1_ratio = models['N1_from_N2'](N2_ratio)
-        self.N1_ratio = N1_ratio
-        self.N2_ratio = N2_ratio
+            # --- 1. Pressões e Temperaturas ---
+            self.prc = self._design_point['prc'] * models['Prc_from_N2'](N2_ratio)
+            self.t04 = self._design_point['t04'] * models['T04_from_N2'](N2_ratio)
 
-        # --- 1. Pressões e Temperaturas ---
-        self.prc = self._design_point['prc'] * models['Prc_from_N2'](N2_ratio)
-        self.t04 = self._design_point['t04'] * models['T04_from_N2'](N2_ratio)
+            # --- 2. EficiÊncias ---
+            self.eta_compressor = self._design_point['eta_compressor'] * models['eta_c_from_N2'](N2_ratio)
+            self.eta_turbina_livre = self._design_point['eta_turbina_livre'] * models['eta_turbina_livre_from_N2'](N2_ratio)
+            self.eta_turbina_compressor = self._design_point['eta_turbina_compressor'] * models['eta_t_from_N2'](N2_ratio)
+            self.eta_camara = self._design_point['eta_camara'] * models['eta_b_from_N2'](N2_ratio)
 
-        # --- 2. EficiÊncias ---
-        self.eta_compressor = self._design_point['eta_compressor'] * models['eta_c_from_N2'](N2_ratio)
-        self.eta_turbina_livre = self._design_point['eta_turbina_livre'] * models['eta_turbina_livre_from_N2'](N2_ratio)
-        self.eta_turbina_compressor = self._design_point['eta_turbina_compressor'] * models['eta_t_from_N2'](N2_ratio)
-        self.eta_camara = self._design_point['eta_camara'] * models['eta_b_from_N2'](N2_ratio)
+            # --- 3. Razão de expansão ---
+            self.pr_tl = self._design_point['pr_tl'] * models['pr_tl_from_N2'](N2_ratio)
 
-        # --- 3. Razão de expansão ---
-        self.pr_tl = self._design_point['pr_tl'] * models['pr_tl_from_N2'](N2_ratio)
-
-        # Vazão mássica (nesse caso hot_air_flow é igual a air_flow)
-        hot_air_flow_ratio = models['m_dot_H_from_N2'](N2_ratio)
-        self.set_sea_level_air_flow(self._design_point['sea_level_air_flow'] * hot_air_flow_ratio)
+            # Vazão mássica (nesse caso hot_air_flow é igual a air_flow)
+            hot_air_flow_ratio = models['m_dot_H_from_N2'](N2_ratio)
+            self.set_sea_level_air_flow(self._design_point['sea_level_air_flow'] * hot_air_flow_ratio)
 
     def update_environment(
-            self,
-            mach: float = None,
-            altitude: float = None,
-            t_a: float = None,
-            p_a: float = None,
-            delta_temperature: float = None,
-            percentage_of_rated_thrust: float | None = None,
+            self, mach: float = None, altitude: float = None, t_a: float = None, p_a: float = None,
+            delta_temperature: float = None, percentage_of_rated_thrust: float = None,
     ):
         """
-        Atualiza as condições de voo e encontra a rotação N2 para atingir um percentual do empuxo de projeto.
-
-        Args:
-            mach (float): Número de Mach.
-            altitude (float): Altitude em pés [ft].
-            t_a (float, optional): Temperatura ambiente em K. Se None, calcula a partir da altitude.
-            p_a (float, optional): Pressão ambiente em kPa. Se None, calcula a partir da altitude.
-            delta_temperature (float, optional): Variação de temperatura em relação à ISA.
-            percentage_of_rated_thrust (float, optional): Percentual do empuxo de projeto a ser atingido (0.0 a 1.0).
-                                                         Se fornecido, otimiza N2 para encontrar o empuxo alvo.
+        Atualiza as condições de voo e encontra N2 para atingir um empuxo alvo,
+        respeitando o limite de potência da gearbox.
         """
-        if not hasattr(self, "_design_point"):
-            raise ValueError(
-                "Ponto de projeto não definido. Execute save_design_point() após a calibração."
-            )
+        if not hasattr(self, '_design_point'): raise ValueError("Ponto de projeto não definido.")
 
-        # 1. Atualiza as condições de ambiente e voo
-        if mach is not None:
-            self.mach = mach
-        if altitude is not None:
-            self.altitude = altitude
-        if delta_temperature is not None:
-            self.delta_isa_temperature = delta_temperature
+        if mach is not None: self.mach = mach
+        if altitude is not None: self.altitude = altitude
+        if delta_temperature is not None: self.delta_isa_temperature = delta_temperature
 
         if altitude is not None or delta_temperature is not None:
-            self.t_a, self.p_a, _, _ = atmosphere(
-                self.altitude * ft2m,
-                Tba=SEA_LEVEL_TEMPERATURE + self.delta_isa_temperature,
-            )
+            self.t_a, self.p_a, _, _ = atmosphere(self.altitude * ft2m,
+                                                  Tba_offset=self.delta_isa_temperature if hasattr(self,
+                                                                                                   'delta_isa_temperature') else 0.0)
             self.p_a /= 1000
 
-        if t_a:
-            self.t_a = t_a
-        if p_a:
-            self.p_a = p_a
+        if t_a: self.t_a = t_a
+        if p_a: self.p_a = p_a
 
-        # 2. Se nenhum percentual de empuxo for fornecido, apenas atualiza os componentes e retorna.
+        # Se nenhum percentual de empuxo for fornecido, apenas atualiza os componentes e retorna.
         if percentage_of_rated_thrust is None:
-            self.set_sea_level_air_flow(self.sea_level_air_flow)
+            self.update_turboprop_components()
             return
 
-        target_thrust = self._design_point["rated_thrust"] * percentage_of_rated_thrust
+        target_thrust_kN = self._design_point['rated_thrust'] * (percentage_of_rated_thrust / 100.0)
 
-        # 3. Define a função objetivo para o otimizador
+        # Define a função objetivo para o otimizador
         def objective_function(n2_ratio):
             self.update_from_N2(n2_ratio)
-            return ((self.get_thrust() - target_thrust) / target_thrust) ** 2
 
-        # 4. Executa a otimização para encontrar o N2
-        result = minimize_scalar(
-            objective_function,
-            bounds=(0.0, 1.0),
-            method="bounded",
-            options={"xatol": 1e-6},
-        )
+            # --- LÓGICA DE LIMITE DE POTÊNCIA (FLAT RATING) ---
+            effective_pot_gear = min(self.pot_gear, self.max_gearbox_power)
 
-        if not result.success:
-            raise RuntimeError(f"Otimização de N2 para empuxo falhou: {result.message}")
+            # Recalcula empuxo da hélice com a potência efetiva (limitada)
+            effective_mach = max(self.mach, self.MACH_THRESHOLD_STATIC)
+            effective_velocity = effective_mach * np.sqrt(self.gamma_inlet * self.mean_R_air * self.t_a)
+            prop_thrust_kN = (self.propeller_efficiency * effective_pot_gear) / effective_velocity
 
-        if result.fun > 0.01:
-            result = minimize_scalar(objective_function, method="Golden", )
+            total_thrust_kN = self.get_nozzle_thrust() + prop_thrust_kN
 
-        if result.fun > 0.01 or result.x >= 0.99 or result.x <= 0.01:
-            if result.fun > 0.01:
-                logger.warning(f"Otimização de N2 não convergiu suficientemente. Erro final: {result.fun:.4f}")
-            if result.fun > 0.01 or result.x <= 0.01:
-                logger.warning("Revertendo N2 para 100% do valor de projeto.")
-            self.update_from_N2(1.0)
-            return
+            return ((self.get_thrust() - total_thrust_kN) / total_thrust_kN) ** 2
+
+        result = minimize_scalar(objective_function, bounds=(0.4, 1.0), method='bounded', options={'xatol': 1e-5})
+
+        if not result.success or result.fun > 0.1:
+            logger.warning(
+                f"Otimização de N2 para empuxo alvo ({target_thrust_kN:.2f} kN) não convergiu perfeitamente. Erro: {result.fun:.4f}. Usando N2={result.x:.3f}")
 
         self.update_from_N2(result.x)
 
-    # Velocidade de Voo
+    def get_thrust_envelope(self, mach: float, altitude_ft: float, delta_isa_temperature_K: float = 0.0) -> dict:
+        """
+        Calcula o envelope de empuxo (mínimo e máximo) para uma dada condição de voo,
+        considerando o limite termodinâmico (N2=100%) e o limite mecânico (Gearbox).
+        """
+        if not hasattr(self, '_design_point'): raise ValueError("Motor não calibrado.")
+
+        # 1. Atualiza ambiente
+        self.update_environment(mach=mach, altitude=altitude_ft, delta_temperature=delta_isa_temperature_K,
+                                percentage_of_rated_thrust=None)
+
+        # 2. Empuxo Máximo: Tenta N2 = 100%
+        self.update_from_N2(1.0)
+
+        # Verifica se excedeu o limite da gearbox
+        if self.pot_gear > self.max_gearbox_power:
+            # Se excedeu, precisamos encontrar o N2 que dá exatamente a potência máxima.
+            def power_obj(n2):
+                self.update_from_N2(n2)
+                return self.pot_gear - self.max_gearbox_power
+
+            try:
+                # Procura a raiz (pot_gear - max_power = 0) entre 50% e 100% N2
+                n2_max_power = brentq(power_obj, 0.5, 1.0)
+                self.update_from_N2(n2_max_power)
+            except ValueError:
+                # Se não encontrou raiz, mantém 100% (improvável se pot_gear(1.0) > max_power)
+                logger.warning("Não foi possível encontrar N2 exato para potência máxima. Usando N2=1.0")
+                self.update_from_N2(1.0)
+
+        max_thrust_kN = self.get_thrust(in_kN=True)
+
+        # --- 2. Cálculo do Empuxo Mínimo (Flight Idle) ---
+        def objective_idle(n2_ratio):
+            self.update_from_N2(n2_ratio)
+            return abs(self.get_thrust())
+
+        # Executa a otimização para encontrar o N2 de marcha lenta
+        idle_result = minimize_scalar(
+            objective_idle,
+            bounds=(0.5, 1.0),  # Limites realistas para a operação do N2
+            method='bounded',
+            options={'xatol': 1e-6}
+        )
+
+        if not idle_result.success:
+            logger.warning(
+                f"Otimização para N2 de marcha lenta falhou. Usando o menor valor do intervalo como fallback.")
+            n2_idle = 0.5
+        else:
+            if idle_result.fun > 0.01:
+                logger.info(
+                    f"Otimização para N2 de marcha lenta não convergiu suficientemente. Erro final: {idle_result.fun:.4f}")
+            else:
+                logger.info(f"Otimização para N2 de marcha lenta convergiu com sucesso!")
+            n2_idle = idle_result.x
+
+        # Define o motor para a condição de marcha lenta e obtém o empuxo
+        self.update_from_N2(n2_idle)
+        min_thrust_kN = self.get_thrust()
+
+        return {'min_thrust_kN': min_thrust_kN, 'max_thrust_kN': max_thrust_kN}
+
     def get_flight_speed(self):
         return self.mach * np.sqrt(self.gamma_inlet * self.mean_R_air * self.t_a)
 
@@ -440,7 +420,7 @@ class Turboprop:
 
     def get_tsfc(self):
         thrust = self.get_thrust(in_kN=True)
-        if thrust <= 1e-6: return float('inf')  # Evita divisão por zero
+        if thrust <= 1e-6: return float('inf')
         return self.get_fuel_consumption() / thrust
 
     def get_bsfc(self):
@@ -448,34 +428,19 @@ class Turboprop:
         return self.get_fuel_consumption() / self.pot_tl
 
     def get_ebsfc(self):
-        equiv_power = self.pot_tl + self.get_nozzle_thrust() * self.get_flight_speed() / 1000  # kW
+        equiv_power = self.pot_tl + self.get_nozzle_thrust() * self.get_flight_speed() / 1000
         if equiv_power <= 1e-6: return float('inf')
         return self.get_fuel_consumption() / equiv_power
 
     def get_nozzle_specific_thrust(self):
-        """
-        Calcula o empuxo específico do motor turboprop.
-
-        O empuxo específico é a força de empuxo gerada por unidade de vazão mássica de ar quente.
-        Considera a contribuição do núcleo (core), descontando a velocidade de voo.
-
-        Returns:
-            float: Empuxo específico em kN/(kg/s).
-
-        """
-        nozzle_specific_thrust_N = (1 + self.fuel_to_air_ratio) * self.u_core - self.u_flight
-        nozzle_specific_thrust_kN = nozzle_specific_thrust_N / 1000
-
-        return nozzle_specific_thrust_kN
+        return ((1 + self.fuel_to_air_ratio) * self.u_core - self.u_flight) / 1000
 
     def get_nozzle_thrust(self):
         return self.get_nozzle_specific_thrust() * self.air_flow
 
     def get_air_flow(self):
-        if self.air_flow is None:
-            raise ValueError("Vazão de ar não definida.")
-        else:
-            return self.air_flow
+        if self.air_flow is None: raise ValueError("Vazão de ar não definida.")
+        return self.air_flow
 
     def get_propeler_thrust(self, in_kN: bool = True) -> float:
         """
@@ -489,20 +454,11 @@ class Turboprop:
         # Empuxo = (Eficiência * Potência) / Velocidade
         # Potência em kW (kJ/s), Velocidade em m/s -> Resultado em kN
         thrust_kN = (self.propeller_efficiency * self.pot_gear) / effective_velocity
+        return thrust_kN if in_kN else thrust_kN * 1000
 
-        if in_kN:
-            return thrust_kN
-        else:
-            return thrust_kN * 1000
-
-    def get_thrust(self, in_kN: bool = True):
-        # Soma o empuxo da hélice (já tratado para Mach 0) e o do bocal
+    def get_thrust(self, in_kN: bool = True) -> float:
         total_thrust_kN = self.get_nozzle_thrust() + self.get_propeler_thrust(in_kN=True)
-
-        if in_kN:
-            return total_thrust_kN
-        else:
-            return total_thrust_kN * 1000
+        return total_thrust_kN if in_kN else total_thrust_kN * 1000
 
     def set_pr_tl(self, pr_tl):
         self.pr_tl = pr_tl
@@ -527,10 +483,7 @@ class Turboprop:
         hydrogen_flow = total_fuel_flow * chi
 
         co2_flow = kerosene_flow * CO2_PER_KEROSENE_MASS
-        h2o_from_kerosene = kerosene_flow * H2O_PER_KEROSENE_MASS
-        h2o_from_hydrogen = hydrogen_flow * H2O_PER_HYDROGEN_MASS
-        total_h2o_flow = h2o_from_kerosene + h2o_from_hydrogen
-
+        total_h2o_flow = (kerosene_flow * H2O_PER_KEROSENE_MASS) + (hydrogen_flow * H2O_PER_HYDROGEN_MASS)
         return {'co2_flow_kgs': co2_flow, 'h2o_flow_kgs': total_h2o_flow}
 
     def print_config(self):
