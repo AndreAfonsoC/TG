@@ -1,7 +1,4 @@
 import numpy as np
-import pandas as pd
-import plotly.express as px
-from numpy import ndarray
 from scipy.optimize import minimize_scalar
 
 from src.components.combustion_chamber import CombustionChamber
@@ -11,48 +8,13 @@ from src.components.nozzle import Nozzle
 from src.components.turbine import Turbine, PowerTurbine
 from utils.aux_tools import atmosphere, ft2m
 from utils.corrections import model_corrections
+from utils.configs import DEFAULT_CONFIG_TURBOPROP
 
 SEA_LEVEL_TEMPERATURE = 288.15  # K
 SEA_LEVEL_PRESSURE = 101.30  # kPa
 
 
 class Turboprop:
-    DEFAULT_CONFIG_DICT = {
-        "mach": 0.0,
-        "altitude": 0.0,  # em ft
-
-        # Eficiências e Gammas
-        "eta_inlet": 0.97,
-        "gamma_inlet": 1.4,
-        "eta_compressor": 0.85,
-        "gamma_compressor": 1.37,
-        "eta_camara": 1,
-        "gamma_camara": 1.35,
-        "eta_turbina_compressor": 0.9,
-        "gamma_turbina_compressor": 1.33,
-        "eta_turbina_livre": 0.9,
-        "gamma_turbina_livre": 1.33,
-        "eta_bocal_quente": 0.98,
-        "gamma_bocal_quente": 1.36,
-
-        # Dados operacionais
-        "prc": 15.77,
-        "pr_tl": 2.87,
-        "hydrogen_fraction": 0.0,
-        "pressure_loss": 0.0,
-        "kerosene_PCI": 45e3,  # kJ/kg
-        "hydrogen_PCI": 120e3,  # kJ/kg
-        "mean_R_air": 288.3,  # (m^2 / (s^2*K))
-        "Cp": 1.11,  # (kJ / (kg*K))
-        "Cp_tl": 1.16,  # (kJ / (kg*K))
-        "T04": 1600,  # (K)
-
-        # Dados da gearbox e hélice
-        "gearbox_efficiency": 0.98,    # potência que chega na hélice / potência que sai da turbina
-        "propeller_efficiency": 0.85,
-        "max_gearbox_power": None,  # kW -> se não fornecido, pode ser considerado como 0.8 * Pot_th (termodinâmica)
-        "ref_pot_th": 2456.49,  # kW -> se não fornecido, pode ser considerado como 0.8 * Pot_th (termodinâmica)
-    }
 
     def __init__(self, config_dict: dict):
         """
@@ -62,7 +24,7 @@ class Turboprop:
         dicionário fornecido.
         """
         # Cria a configuração final mesclando os padrões com os fornecidos
-        self.final_config = self.DEFAULT_CONFIG_DICT.copy()
+        self.final_config = DEFAULT_CONFIG_TURBOPROP.copy()
         self.final_config.update(config_dict)
 
         # --- Dados do ambiente ---
@@ -70,7 +32,8 @@ class Turboprop:
         self.altitude = self.final_config["altitude"]
         t_a_altitude, p_a_altitude, _, _ = atmosphere(self.altitude * ft2m)
         self.t_a = self.final_config.get("t_a", t_a_altitude) or t_a_altitude
-        self.p_a = self.final_config.get("p_a", p_a_altitude / 1000) or p_a_altitude / 1000  # Divide por 1000 para passar para Pa
+        self.p_a = self.final_config.get("p_a",
+                                         p_a_altitude / 1000) or p_a_altitude / 1000  # Divide por 1000 para passar para Pa
 
         # --- Eficiências e Gammas ---
         self.eta_inlet = self.final_config["eta_inlet"]
@@ -219,7 +182,6 @@ class Turboprop:
         Args:
             pr_tl_min (float): Limite inferior da busca para pr_tl.
             pr_tl_max (float): Limite superior da busca para pr_tl.
-            tol (float): Tolerância de precisão para o otimizador.
         """
 
         # 1. Definir a função objetivo (a ser minimizada)
@@ -261,7 +223,6 @@ class Turboprop:
         Args:
             N2_min (float): Limite inferior da busca para N2 (ex: 50%).
             N2_max (float): Limite superior da busca para N2 (ex: 100%).
-            tol (float): Tolerância de precisão para o otimizador.
         """
         if self.max_gearbox_power is None:
             raise ValueError("O atributo 'max_gearbox_power' não foi definido.")
@@ -441,8 +402,10 @@ class Turboprop:
             "Condições de Voo e Ambiente": ["mach", "altitude", "t_a", "p_a"],
             "Eficiências": [k for k in self.final_config if k.startswith("eta_")],
             "Gammas": [k for k in self.final_config if k.startswith("gamma_")],
-            "Dados Operacionais": ["prc", "pr_tl", "hydrogen_fraction", "pressure_loss", "kerosene_PCI", "hydrogen_PCI", "mean_R_air", "Cp", "Cp_tl", "T04"],
-            "Dados da Gearbox e Hélice": ["gearbox_efficiency", "propeller_efficiency", "max_gearbox_power", "ref_pot_th"]
+            "Dados Operacionais": ["prc", "pr_tl", "hydrogen_fraction", "pressure_loss", "kerosene_PCI", "hydrogen_PCI",
+                                   "mean_R_air", "Cp", "Cp_tl", "T04"],
+            "Dados da Gearbox e Hélice": ["gearbox_efficiency", "propeller_efficiency", "max_gearbox_power",
+                                          "ref_pot_th"]
         }
 
         for category, keys in categories.items():
@@ -502,13 +465,14 @@ class Turboprop:
         print(f"{'Razão Combustível/Ar (f)':<35}: {self.fuel_to_air_ratio:.5f}")
         print(f"{'Velocidade Bocal Quente (u_core)':<32}: {self.u_core:.3f} m/s")
         print(f"{'Velocidade de Voo (u_0)':<32}: {self.u_flight:.3f} m/s")
-        print(f"{'Consumo Esp. no eixo (BSFC)':<35}: {self.get_bsfc()*10**5:.2f} kg/(s*kW) * 10^-5")
-        print(f"{'Consumo Esp. Equivalente (EBSFC)':<35}: {self.get_ebsfc()*10**5:.2f} kg/(s*kW) * 10^-5")
+        print(f"{'Consumo Esp. no eixo (BSFC)':<35}: {self.get_bsfc() * 10 ** 5:.2f} kg/(s*kW) * 10^-5")
+        print(f"{'Consumo Esp. Equivalente (EBSFC)':<35}: {self.get_ebsfc() * 10 ** 5:.2f} kg/(s*kW) * 10^-5")
         print(f"{'Consumo de Combustível':<35}: {self.get_fuel_consumption():.3f} kg/s")
         print("\n" + "-" * 61)
 
+
 if __name__ == "__main__":
-    from utils.configs import config_ex71, config_ex72
+    from utils.configs import config_ex71
 
     turboprop = Turboprop(config_ex71)
     turboprop.set_air_flow(8.49)
