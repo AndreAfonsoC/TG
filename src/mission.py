@@ -7,6 +7,7 @@ from scipy.optimize import brentq
 
 from src.systems import FuelSystem
 from src.turbofan import Turbofan
+from src.turboprop import Turboprop
 from utils.aux_tools import (
     calculate_energy_from_fuel,
     calculate_fuel_consumption_breakdown,
@@ -14,8 +15,6 @@ from utils.aux_tools import (
     KEROSENE_PCI,
     H2_PCI
 )
-
-# from src.turboprop import Turboprop # Exemplo para uso futuro
 
 # --- Configuração do Logger ---
 LOG_DIR = "logs"
@@ -50,9 +49,7 @@ if not logger.handlers:
     logger.addHandler(console_handler)
 
 # Cria uma dica de tipo (type hint) para o objeto do motor para um código mais limpo
-EngineType = Union[
-    Turbofan
-]  # Todo: Adicionar Turboprop aqui depois: Union[Turbofan, Turboprop]
+EngineType = Union[Turbofan, Turboprop]
 
 
 class MissionManager:
@@ -68,9 +65,9 @@ class MissionManager:
             self,
             engine: EngineType,
             num_engines: int,
-            design_fuel_flow_kgs: float,
-            design_t04_k: float,
             zero_fuel_weight: float,
+            design_t04_k: float | None = None,
+            design_fuel_flow_kgs: float | None = None,
             misison_avg_chi: float | None = None,
     ):
         """
@@ -227,9 +224,11 @@ class MissionManager:
         summary_df = full_df[summary_cols]
 
         # Salva os arquivos CSV, aplicando o arredondamento na saída
-        summary_df.to_csv('mission_summary.csv', index=False, float_format='%.4f')
-        full_df.to_csv('mission_detailed.csv', index=False, float_format='%.4f')
-        logger.info("Relatórios 'mission_summary.csv' e 'mission_detailed.csv' foram salvos.")
+        mission_summary_path = 'mission_summary_turbofan.csv' if isinstance(self.engine, Turbofan) else 'mission_summary_turboprop.csv'
+        mission_detailed_path = 'mission_detailed_turbofan.csv' if isinstance(self.engine, Turbofan) else 'mission_detailed_turboprop.csv'
+        summary_df.to_csv(mission_summary_path, index=False, float_format='%.4f')
+        full_df.to_csv(mission_detailed_path, index=False, float_format='%.4f')
+        logger.info("Relatórios 'mission_summary' e 'mission_detailed' foram salvos.")
 
         self.results = {
             'Combustível Inicial (kg)': optimal_fuel_mass,
@@ -292,11 +291,14 @@ class MissionManager:
                 # Recalibrando o motor (mas mantendo a temperatura de entrada na turbina T04)
                 self.engine.update_final_config({"hydrogen_fraction": phase_chi})
                 NEW_PCI = phase_chi * H2_PCI + (1 - phase_chi) * KEROSENE_PCI
-                self.engine.calibrate_turbofan(
-                    self.engine._design_point["rated_thrust"],
-                    self.design_fuel_flow_kgs * KEROSENE_PCI / NEW_PCI,
-                    t04_bounds=(self.design_t04_k-0.0001, self.design_t04_k)
-                )
+                if isinstance(self.engine, Turbofan):
+                    self.engine.calibrate_turbofan(
+                        self.engine._design_point["rated_thrust"],
+                        self.design_fuel_flow_kgs * KEROSENE_PCI / NEW_PCI,
+                        t04_bounds=(self.design_t04_k-0.0001, self.design_t04_k)
+                    )
+                else:
+                    self.engine.calibrate_pot_th()
 
                 # Atualiza ambiente e encontra N2 para o empuxo
                 thrust_percentage_required = phase["thrust_percentage"]
@@ -367,6 +369,11 @@ class MissionManager:
                     'BPR': self.engine.bpr if hasattr(self.engine, 'bpr') else None,
                     'Prf': self.engine.prf if hasattr(self.engine, 'prf') else None,
                     'Prc': self.engine.prc,
+                    'pr_tl': self.engine.pr_tl if isinstance(self.engine, Turboprop) else None,
+                    'Pot_g': self.engine.pot_gear if isinstance(self.engine, Turboprop) else None,
+                    'max_gearbox_power': self.engine.max_gearbox_power if isinstance(self.engine, Turboprop) else None,
+                    'Pot_tl': self.engine.pot_tl if isinstance(self.engine, Turboprop) else None,
+                    'ref_pot_th': self.engine.ref_pot_th if isinstance(self.engine, Turboprop) else None,
                 }
                 phase_details.append(phase_data)
 

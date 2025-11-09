@@ -144,7 +144,7 @@ class Turbofan:
         """
         Salva os valores dos parâmetros no ponto de projeto após a calibração.
         """
-        logger.debug("Salvando ponto de projeto do motor...")
+        logger.debug("Salvando ponto de projeto do turbofan...")
         self._design_point = {
             "bpr": self.bpr,
             "prf": self.prf,
@@ -528,6 +528,10 @@ class Turbofan:
         return self.fuel_to_air_ratio * self.get_hot_air_flow()
 
     def get_emissions_flow(self) -> dict:
+        """
+        Calcula as vazões mássicas de emissões de CO2 e H2O.
+        Lógica baseada na estequiometria do combustível.
+        """
         total_fuel_flow = self.get_fuel_consumption()
         chi = self.hydrogen_fraction
         kerosene_flow = total_fuel_flow * (1 - chi)
@@ -540,6 +544,7 @@ class Turbofan:
         h2o_from_kerosene = kerosene_flow * H2O_PER_KEROSENE_MASS
         h2o_from_hydrogen = hydrogen_flow * H2O_PER_HYDROGEN_MASS
         total_h2o_flow = h2o_from_kerosene + h2o_from_hydrogen
+
         return {"co2_flow_kgs": co2_flow, "h2o_flow_kgs": total_h2o_flow}
 
     # Print dos Outputs

@@ -182,8 +182,10 @@ config_teste2 = {
 
 config_ex71 = {
     "mach": 0.0,
+    "altitude": 0.0,  # em ft
     "t_a": 288.15,
     "p_a": 101.3,
+    "delta_isa_temperature": 0.0,
 
     # Eficiências e Gammas
     "eta_inlet": 0.85,
@@ -260,6 +262,47 @@ config_ex73 = {
     "Cp": 1.11,  # (kJ / (kg*K))
     "T04": 1550,  # (K)
 }
+
+DEFAULT_CONFIG_TURBOPROP = {
+    "mach": 0.0,
+    "altitude": 0.0,  # em ft
+    "delta_isa_temperature": 0.0,
+
+    # Eficiências e Gammas
+    "eta_inlet": 0.85,
+    "gamma_inlet": 1.4,
+    "eta_compressor": 0.75,
+    "gamma_compressor": 1.37,
+    "eta_camara": 1,
+    "gamma_camara": 1.35,
+    "eta_turbina_compressor": 0.9,
+    "gamma_turbina_compressor": 1.33,
+    "eta_turbina_livre": 0.9,
+    "gamma_turbina_livre": 1.33,
+    "eta_bocal_quente": 0.98,
+    "gamma_bocal_quente": 1.36,
+
+    # Dados operacionais
+    "hydrogen_fraction": 0.0,
+    "pressure_loss": 0.0,
+    "kerosene_PCI": 45e3,  # kJ/kg
+    "hydrogen_PCI": 120e3,  # kJ/kg
+    "mean_R_air": 288.3,  # (m^2 / (s^2*K))
+    "Cp": 1.11,  # (kJ / (kg*K))
+    "Cp_tl": 1.16,  # (kJ / (kg*K))
+
+    # Dados da gearbox e hélice
+    "gearbox_efficiency": 0.98,  # potência que chega na hélice / potência que sai da turbina
+    "propeller_efficiency": 0.85,
+
+    # Dados que precisam ser inputados
+    # "pr_tl": 2.8778,
+    # "prc": 15.77,
+    # "T04": 1600,  # (K)
+    # "max_gearbox_power": 2050,  # kW -> se não fornecido, pode ser considerado como 0.8 * Pot_th (termodinâmica)
+    # "ref_pot_th": 2457,  # kW -> se não fornecido, pode ser considerado como 0.8 * Pot_th (termodinâmica)
+}
+
 
 DEFAULT_CONFIG_TURBOFAN = {
     "mach": 0.0,

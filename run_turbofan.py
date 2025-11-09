@@ -14,11 +14,11 @@ from utils.aux_tools import (
 # --- Configuração do Logger ---
 LOG_DIR = "logs"
 if not os.path.exists(LOG_DIR): os.makedirs(LOG_DIR)
-logger = logging.getLogger("main_simulation")
+logger = logging.getLogger("main_simulation_turbofan")
 logger.setLevel(logging.INFO)
 if not logger.handlers:
     # Handlers (arquivo e console)
-    log_file = os.path.join(LOG_DIR, "main_simulation.log")
+    log_file = os.path.join(LOG_DIR, "main_simulation_turbofan.log")
     file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-16')
     console_handler = logging.StreamHandler()
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')  # Formato mais simples
@@ -157,6 +157,7 @@ def display_final_results(stage_name: str, results: dict, chi: float, zfw: float
         logger.info(f"  - QAV Inicial: {fs_final_obj.kerosene_mass_initial:.2f} kg")
         tanque_peso = fs_final_obj.get_tank_weight()
         logger.info(f"Peso Tanque H2 ({fs_final_obj.tank_type}): {tanque_peso:.2f} kg")
+        logger.info(f"Combustível + Tanque H2 ({fs_final_obj.tank_type}): {tanque_peso + results['Combustível Inicial (kg)']:.2f} kg")
         tow = zfw + fs_final_obj.get_total_weight_at_takeoff()
         logger.info(f"Peso Total Decolagem (TOW): {tow:,.2f} kg")
         logger.info("\n--- EMISSÕES TOTAIS ---")
