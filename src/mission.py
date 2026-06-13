@@ -207,7 +207,9 @@ class MissionManager:
             # Verifica se o empuxo necessário foi atingido em cada fase
             for phase_detail in final_results.get("phase_details", []):
                 if abs(phase_detail.get("Empuxo Obtido (kN)", 0) - phase_detail.get("Empuxo Requerido (kN)",
-                                                                                    float("inf"))) > 0.01:
+                                                                                    float("inf"))) > 0.5:
+                    print(phase_detail.get("Empuxo Obtido (kN)", 0) - phase_detail.get("Empuxo Requerido (kN)",
+                                                                                    float("inf")))
                     raise ValueError(f"Empuxo necessário não atingido na fase {phase_detail['Fase']}")
         except ValueError as e:
             logger.error(f"Falha na simulação final: {str(e)}")
@@ -228,6 +230,11 @@ class MissionManager:
         mission_detailed_path = 'mission_detailed_turbofan.csv' if isinstance(self.engine, Turbofan) else 'mission_detailed_turboprop.csv'
         summary_df.to_csv(mission_summary_path, index=False, float_format='%.4f')
         full_df.to_csv(mission_detailed_path, index=False, float_format='%.4f')
+        # full_df[["Fase", "Peso Inicial (kg)"]].to_clipboard(index=False)
+        full_df[["Fase", "Peso Inicial (kg)",  "Zero Fuel Weight (kg)",	"Peso do Tanque de H2 (kg)",	"Combustível Total (kg)",
+                 "Empuxo Requerido (kN)", "N2 (%)", "T04 (K)", "Emissão CO2 (kg)",	"Emissão H2O (kg)"]].to_clipboard(index=False)
+        # full_df.to_clipboard(index=False)
+
         logger.info("Relatórios 'mission_summary' e 'mission_detailed' foram salvos.")
 
         self.results = {

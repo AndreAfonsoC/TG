@@ -219,3 +219,10 @@ def discretize_phase(phase_data: Dict, max_segment_duration_min: float) -> List[
         discretized_phases.append(new_phase)
 
     return discretized_phases
+
+
+if __name__ == "__main__":
+    # Teste rápido da função atmosphere
+    altitude_test = 40e3 * ft2m
+    T, P, rho, mu = atmosphere(altitude_test)
+    print(f"At {altitude_test} m: T={T:.2f} K, P={P/1000:.2f} kPa, rho={rho:.4f} kg/m³, mu={mu:.6e} Pa·s")

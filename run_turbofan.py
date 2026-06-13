@@ -39,7 +39,7 @@ logger.info("Definindo inputs da simulação...")
 
 # --- Aeronave ---
 AIRCRAFT_PRESET = "b737-800"
-ZERO_FUEL_WEIGHT_KG = 61_500
+ZERO_FUEL_WEIGHT_KG = 60e3
 NUM_ENGINES = 2
 
 # --- Motor ---
@@ -50,7 +50,7 @@ T04_BOUNDS_CALIBRATION = (1400, 1800)
 MDOT_BOUNDS_CALIBRATION = (300, 600)
 
 # --- Missão ---
-MISSION_CHI = 0.1  # Fração inicial de H2
+MISSION_CHI = 1.0  # Fração inicial de H2
 TANK_TYPE = "TYPE_IV"
 MAX_SEGMENT_DURATION_MIN = 15
 FUEL_GUESS_BOUNDS = (10, 200e3)
@@ -63,7 +63,7 @@ def get_base_flight_profile() -> list:
     """Retorna o perfil de voo base com estimativas de empuxo e dados aero."""
     # Contém dados completos, incluindo os necessários para Aerodynamics
     return [
-        {'name': 'Taxi (Saída)',   'duration_min': 1,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 7, 'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'kerosene_only'},    # 'kerosene_only', 'proportional', 'hydrogen_only'
+        {'name': 'Taxi (Saída)',   'duration_min': 5,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 7, 'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'proportional'},    # 'kerosene_only', 'proportional', 'hydrogen_only'
         {'name': 'Decolagem',      'duration_min': 1,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 100,  'roc_ft_min': 0,  'configuration': 'takeoff', 'burn_strategy': 'proportional'},
         {'name': 'Subida 1',       'duration_min': 8,   'altitude_ft': 5830,  'mach': 0.298, 'thrust_percentage': 50,  'roc_ft_min': 2400,  'configuration': 'clean',   'burn_strategy': 'proportional'},
         {'name': 'Subida 2',       'duration_min': 8,   'altitude_ft': 17500, 'mach': 0.494, 'thrust_percentage': 30,  'roc_ft_min': 1500,  'configuration': 'clean',   'burn_strategy': 'proportional'},

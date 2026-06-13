@@ -39,7 +39,7 @@ logger.info("Definindo inputs da simulação...")
 
 # --- Aeronave (ATR 72-600 Reference) ---
 AIRCRAFT_PRESET = "atr72-600"
-ZERO_FUEL_WEIGHT_KG = 20_400 # Valor típico estimado para ATR 72
+ZERO_FUEL_WEIGHT_KG = 19_000 # Valor típico estimado para ATR 72
 NUM_ENGINES = 2
 
 # --- Motor (PW127 Reference) ---
@@ -52,7 +52,7 @@ PR_TL = 2.87  # Relação de pressão total no tubo de escape
 SEA_LEVEL_AIR_FLOW_KG_S = 8.49
 
 # --- Missão (Regional Típica) ---
-MISSION_CHI = 0.3 # Fração inicial de H2
+MISSION_CHI = 0.2 # Fração inicial de H2
 TANK_TYPE = "TYPE_IV"
 MAX_SEGMENT_DURATION_MIN = 15
 FUEL_GUESS_BOUNDS = (100, 10000) # Limites menores que jato, pois consome menos
@@ -68,7 +68,7 @@ def get_base_flight_profile() -> list:
         {'name': 'Taxi (Saída)',   'duration_min': 5,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 7, 'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'kerosene_only'},    # 'kerosene_only', 'proportional', 'hydrogen_only'
         {'name': 'Decolagem',      'duration_min': 1,   'altitude_ft': 0,     'mach': 0.000, 'thrust_percentage': 80,  'roc_ft_min': 0,  'configuration': 'takeoff', 'burn_strategy': 'kerosene_only'},
         {'name': 'Subida 1',       'duration_min': 6,   'altitude_ft': 3330,  'mach': 0.225, 'thrust_percentage': 35,  'roc_ft_min': 1600,  'configuration': 'clean',   'burn_strategy': 'kerosene_only'},
-        {'name': 'Subida 2',       'duration_min': 6,   'altitude_ft': 10000, 'mach': 0.315, 'thrust_percentage': 25,  'roc_ft_min': 1000,  'configuration': 'clean',   'burn_strategy': 'proportional'},
+        {'name': 'Subida 2',       'duration_min': 6,   'altitude_ft': 10000, 'mach': 0.315, 'thrust_percentage': 25,  'roc_ft_min': 1000,  'configuration': 'clean',   'burn_strategy': 'kerosene_only'},
         {'name': 'Subida 3',       'duration_min': 6,   'altitude_ft': 16667, 'mach': 0.405, 'thrust_percentage': 15,   'roc_ft_min': 500,  'configuration': 'clean',   'burn_strategy': 'proportional'},
         {'name': 'Cruzeiro',       'duration_min': 25, 'altitude_ft': 20000, 'mach': 0.450, 'thrust_percentage': 12,  'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'proportional'},
         {'name': 'Loiter',         'duration_min': 25,  'altitude_ft': 14000, 'mach': 0.300, 'thrust_percentage': 10,   'roc_ft_min': 0,     'configuration': 'clean',   'burn_strategy': 'proportional'},
